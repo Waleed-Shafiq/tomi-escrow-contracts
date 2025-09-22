@@ -10,4 +10,6 @@ contract CounterTest is Test {
     function setUp() public {
         escrowPayment = new EscrowPayment();
     }
+
+    //First test will be here
 }
