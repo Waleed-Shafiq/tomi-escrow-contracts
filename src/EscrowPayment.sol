@@ -13,14 +13,21 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     using SafeERC20 for IERC20;
     ITomiDispute public tomiDisputeAddress;
+
+    address public feeWallet;
+    address public swapandBurnContract;
+    address public usdtToken;
+    address public resolverAI;
+
+    uint256 public escrowId;
+    uint256 public resolverFeeAI;
+
     uint256 public constant PPM = 1_000_000; //100 %
     uint256 public constant escrowPlatformFee = 10_000; //1%
     uint256 public constant regularDisputeDealSizeFee = 2_500; //0.25%
     uint256 public constant miniDisputeDealSizeFee = 5_000; //0.5%
-    uint256 public escrowId;
-    address public feeWallet;
-    address public swapandBurnContract;
-    address public usdtToken;
+    uint256 public constant DENIED_REFUND_TIME = 72 hours; // 72 Hours
+    uint256 public constant APPEAL_TIME_DISPUTE_AI = 30 minutes; // 30 Mints
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Structs                                ║ //
@@ -35,6 +42,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 tokenAmount;
         uint256 feeinPPM;
         uint256 submissionDeadline;
+        uint256 resultTime; // the timestamp of response of the creator
         EscrowStatus status;
         DisputeType disputeType;
     }
@@ -43,6 +51,12 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address disputeContract;
         address winnerAddress;
         DisputeStatus status;
+    }
+
+    struct EscrowAIDisputeInfo {
+        uint256 escrowID;
+        uint256 resolveTime;
+        address winnerAddress;
     }
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
@@ -59,8 +73,11 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         Accepted,
         Submitted,
         Released,
+        Denied,
         Refunded,
-        InDispute
+        InDisputeAI,
+        ResolvedAI,
+        InDisputeOracle
     }
 
     enum DisputeStatus {
@@ -89,19 +106,48 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     error EscrowNotExpiredYet();
     error OnlyUsdtAllowed();
     error WinnnerNotRevealedYet();
+    error WinnnerRevealed();
+    error SameAsLastOne();
+    error RefundNotAllowed();
+    error AppealTimeNotPassedYet();
+    error InvalidResponse();
+    error AppealWindowOver();
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Events                                 ║ //
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
     event EscrowCreated(Escrow escrowdetails, uint256 escrowFee);
-    event EscrowAccepted(Escrow escrowdetails);
-    event EscrowRefunded(Escrow escrowdetails);
-    event EscrowSubmitted(Escrow escrowdetails);
+    event EscrowAccepted(uint256 escrowId, EscrowStatus escrowIdStatus);
+    event EscrowRefunded(uint256 escrowId, EscrowStatus escrowIdStatus);
+    event EscrowSubmitted(uint256 escrowId, EscrowStatus escrowIdStatus);
+    event EscrowDenied(uint256 escrowId, EscrowStatus escrowIdStatus);
     event EscrowReleased(
-        Escrow escrowdetails,
+        uint256 escrowId,
+        EscrowStatus escrowIdStatus,
         uint256 amountReleased,
         uint256 feeForSwapandBurn
+    );
+    event DipsuteAICreated(uint256 escrowID, address disputerAddress);
+    event DisputeOracleCreated(uint256 escrowID, address disputerAddress);
+    event DisputeResolvedByAI(
+        uint256 escrowID,
+        address winnerAddress,
+        uint256 timeStamp
+    );
+    event DisputeResolvedByOracle(
+        uint256 escrowID,
+        address disputeContract,
+        address winnerAddress,
+        uint256 timeStamp
+    );
+
+    event AI_DisputeClaimed(uint256 escrowId, EscrowStatus escrowIdStatus);
+    event ProofSubmitted(
+        uint256 escrowId,
+        address disputeContract,
+        address submittedBy,
+        string proofURI
     );
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
@@ -109,8 +155,12 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
     mapping(uint256 escrowID => Escrow escrow) public escrows;
+    mapping(uint256 escrowID => bool created) public escrowIDtoAIDispute;
+    mapping(uint256 escrowID => EscrowAIDisputeInfo escrowDisputAI)
+        public escrowtoDisputeAI;
+
     mapping(uint256 escrowID => EscrowDisputeInfo escrowDispute)
-        public escrowtoDispute;
+        public escrowtoDisputeOracle;
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Constructor                            ║ //
@@ -129,15 +179,33 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address feeWalletAddress,
         address swapandBurnContractAddress,
         address tomiDisputeaddress,
-        address usdtAddress
+        address usdtAddress,
+        address resolverAIAddress,
+        uint256 resolverFeeAmount
     ) external initializer {
-        if (feeWalletAddress == address(0)) {
+        if (
+            feeWalletAddress == address(0) ||
+            swapandBurnContractAddress == address(0) ||
+            tomiDisputeaddress == address(0) ||
+            usdtAddress == address(0) ||
+            resolverAIAddress == address(0)
+        ) {
             revert ZeroAddress();
         }
+
+        if (resolverFeeAmount == 0) {
+            revert ZeroAmount();
+        }
+
+        __Ownable_init(msg.sender); //will update this to owner param
+        __UUPSUpgradeable_init();
+
         swapandBurnContract = swapandBurnContractAddress;
         feeWallet = feeWalletAddress;
         tomiDisputeAddress = ITomiDispute(tomiDisputeaddress);
         usdtToken = usdtAddress;
+        resolverAI = resolverAIAddress;
+        resolverFeeAI = resolverFeeAmount;
     }
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
@@ -169,11 +237,12 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert ZeroAddress();
         }
 
-        if (amountInUSDT == 0 && feeinPPM == 0) {
+        if (amountInUSDT == 0 || feeinPPM == 0) {
             revert ZeroAmount();
         }
 
-        if (deadline > block.timestamp) {
+        // Require a future deadline
+        if (deadline <= block.timestamp) {
             revert InvalidTime();
         }
 
@@ -190,20 +259,6 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         escrowId++;
 
-        //transfer fee of the escrow + the amount in usdtToken to this address
-        IERC20(tokenAddress).safeTransferFrom(
-            msg.sender,
-            address(this),
-            (amountInUSDT + (amountInUSDT * escrowPlatformFee) / PPM)
-        );
-
-        //transfer fee to the escrow fee wallet
-        IERC20(tokenAddress).safeTransferFrom(
-            address(this),
-            feeWallet,
-            (amountInUSDT * escrowPlatformFee) / PPM
-        );
-
         escrows[escrowId] = Escrow({
             escrowDetialsURI: detailsURI,
             submissionURI: "",
@@ -213,11 +268,26 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             tokenAmount: amountInUSDT,
             feeinPPM: feeinPPM,
             submissionDeadline: deadline,
+            resultTime: 0,
             status: EscrowStatus.Created,
             disputeType: disputeType
         });
 
         Escrow memory activeEscrow = escrows[escrowId];
+
+        //transfer fee of the escrow + the amount in usdtToken to this address
+        IERC20(tokenAddress).safeTransferFrom(
+            msg.sender,
+            address(this),
+            (amountInUSDT + (amountInUSDT * escrowPlatformFee) / PPM)
+        );
+
+        //transfer fee to the escrow fee wallet
+        IERC20(tokenAddress).safeTransfer(
+            feeWallet,
+            (amountInUSDT * escrowPlatformFee) / PPM
+        );
+
         emit EscrowCreated({
             escrowdetails: activeEscrow,
             escrowFee: (amountInUSDT * escrowPlatformFee) / PPM
@@ -230,7 +300,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
      *      Ensure that the caller has the necessary permissions to accept the escrow.
      * @param escrowID The unique identifier of the escrow agreement to be accepted.
      */
-    function AcceptEscrow(uint256 escrowID) public {
+    function AcceptEscrow(uint256 escrowID) external {
         Escrow storage activeEscrow = escrows[escrowID];
 
         if (activeEscrow.toAddress != msg.sender) {
@@ -246,7 +316,10 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         }
 
         activeEscrow.status = EscrowStatus.Accepted;
-        emit EscrowAccepted({escrowdetails: activeEscrow});
+        emit EscrowAccepted({
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status
+        });
     }
 
     /**
@@ -255,29 +328,45 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
      *      Ensure that the caller is the creator of the escrow and the escrow is in the correct state.
      * @param escrowID The unique identifier of the escrow agreement to be refunded.
      */
-    function RefundEscrow(uint256 escrowID) public {
+    function RefundEscrow(uint256 escrowID) external {
         Escrow storage activeEscrow = escrows[escrowID];
 
         if (activeEscrow.fromAddress != msg.sender) {
             revert YouAreNotAuthorized();
         }
 
-        if (activeEscrow.status != EscrowStatus.Created) {
-            revert OnlyCreatedOneAreAllowed();
-        }
-
-        if (activeEscrow.submissionDeadline > block.timestamp) {
-            revert EscrowNotExpiredYet();
+        // If not accepted yet, allow instant refund
+        if (activeEscrow.status == EscrowStatus.Created) {
+            //proceed
+        } else if (activeEscrow.status == EscrowStatus.Accepted) {
+            // If accepted, only allow refund after deadline, and only if no submission was made
+            if (block.timestamp < activeEscrow.submissionDeadline) {
+                revert EscrowNotExpiredYet();
+            }
+        } else if (activeEscrow.status == EscrowStatus.InDisputeOracle) {
+            revert InDispute();
+        } else if (activeEscrow.status == EscrowStatus.Denied) {
+            if (
+                activeEscrow.resultTime + DENIED_REFUND_TIME > block.timestamp
+            ) {
+                revert AppealTimeNotPassedYet();
+            }
+        } else {
+            // Submitted/Released/Refunded or any other state is not refundable
+            revert RefundNotAllowed();
         }
 
         activeEscrow.status = EscrowStatus.Refunded;
 
-        IERC20(usdtToken).safeTransferFrom(
-            address(this),
+        IERC20(activeEscrow.tokenAddress).safeTransfer(
             activeEscrow.fromAddress,
             activeEscrow.tokenAmount
         );
-        emit EscrowRefunded({escrowdetails: activeEscrow});
+
+        emit EscrowRefunded({
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status
+        });
     }
 
     /**
@@ -296,14 +385,24 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert YouAreNotAuthorized();
         }
 
-        if (activeEscrow.status != EscrowStatus.Accepted) {
+        if (
+            activeEscrow.status != EscrowStatus.Accepted &&
+            activeEscrow.status != EscrowStatus.Submitted
+        ) {
             revert OnlyAcceptedOneAreAllowed();
+        }
+
+        if (block.timestamp > activeEscrow.submissionDeadline) {
+            revert EscrowExpired();
         }
 
         activeEscrow.submissionURI = submissionURI;
         activeEscrow.status = EscrowStatus.Submitted;
 
-        emit EscrowSubmitted({escrowdetails: activeEscrow});
+        emit EscrowSubmitted({
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status
+        });
     }
 
     /**
@@ -323,11 +422,8 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert OnlySubmittedOneAreAllowed();
         }
 
-        if (activeEscrow.status == EscrowStatus.InDispute) {
-            revert InDispute();
-        }
-
         activeEscrow.status = EscrowStatus.Released;
+        activeEscrow.resultTime = block.timestamp;
         uint256 feeAmount = (activeEscrow.tokenAmount *
             (activeEscrow.feeinPPM)) / PPM;
 
@@ -343,9 +439,195 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         );
 
         emit EscrowReleased({
-            escrowdetails: activeEscrow,
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status,
             amountReleased: (activeEscrow.tokenAmount - feeAmount),
             feeForSwapandBurn: feeAmount
+        });
+    }
+
+    /**
+     * @notice Denies an escrow transaction with the given escrow ID.
+     * @dev This function allows the caller to deny an existing escrow transaction.
+     *      Ensure that the caller has the appropriate permissions to deny the escrow.
+     * @param escrowID The unique identifier of the escrow transaction to be denied.
+     */
+    function DenyEscrow(uint256 escrowID) external {
+        Escrow storage activeEscrow = escrows[escrowID];
+
+        if (activeEscrow.fromAddress != msg.sender) {
+            revert YouAreNotAuthorized();
+        }
+
+        if (activeEscrow.status != EscrowStatus.Submitted) {
+            revert OnlySubmittedOneAreAllowed();
+        }
+
+        activeEscrow.status = EscrowStatus.Denied;
+        activeEscrow.resultTime = block.timestamp;
+
+        emit EscrowDenied({
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status
+        });
+    }
+
+    // ╔════════════════════════════════════════════════════════════════════╗ //
+    // ║                         AI Dispute Functions                       ║ //
+    // ╚════════════════════════════════════════════════════════════════════╝ //
+
+    /**
+     * @notice Creates an AI dispute for the specified escrow transaction.
+     * @dev This function allows the caller to initiate a dispute for an escrow identified by `escrowID`.
+     *      The dispute will be handled by an AI-based resolution mechanism.
+     * @param escrowID The unique identifier of the escrow transaction for which the dispute is being created.
+     */
+    function createAIDispute(uint256 escrowID, uint256 resolverFee) external {
+        Escrow storage activeEscrow = escrows[escrowID];
+
+        // Only responder (toAddress) can create the AI dispute
+        if (msg.sender != activeEscrow.toAddress) {
+            revert YouAreNotAuthorized();
+        }
+
+        // Allow AI dispute when Submitted or Denied
+        if (
+            activeEscrow.status != EscrowStatus.Submitted &&
+            activeEscrow.status != EscrowStatus.Denied
+        ) {
+            revert OnlySubmittedOneAreAllowed();
+        }
+
+        if (
+            IERC20(usdtToken).allowance(msg.sender, address(this)) < resolverFee
+        ) {
+            revert InsufficientAllowance();
+        }
+
+        if (resolverFee < resolverFeeAI) {
+            revert InvalidFee();
+        }
+
+        // transfer the resolver fee to the AI resolver as 1 USDT
+        IERC20(usdtToken).safeTransferFrom(msg.sender, resolverAI, resolverFee);
+
+        escrowIDtoAIDispute[escrowID] = true;
+        activeEscrow.status = EscrowStatus.InDisputeAI;
+        escrowtoDisputeAI[escrowID] = EscrowAIDisputeInfo({
+            escrowID: escrowID,
+            resolveTime: 0,
+            winnerAddress: address(0)
+        });
+
+        emit DipsuteAICreated(escrowID, msg.sender);
+    }
+
+    //NEED TO ADD THE SIGN HERE IN BELOW FUNCTION
+
+    /**
+     * @notice Resolves an escrow dispute via AI for the specified escrow ID.
+     * @dev This function is called by the AI resolver to determine the winner of the dispute.
+     *      The function ensures that the caller is the authorized AI resolver and that the escrow is in dispute.
+     * @param escrowID The unique identifier of the escrow transaction being resolved.
+     * @param winnerAddress The address of the party determined to be the winner of the dispute.
+     */
+    function resolveViaAI(uint256 escrowID, address winnerAddress) external {
+        if (msg.sender != resolverAI) {
+            revert YouAreNotAuthorized();
+        }
+
+        Escrow storage activeEscrow = escrows[escrowID];
+
+        if (
+            escrowIDtoAIDispute[escrowID] != true &&
+            activeEscrow.status != EscrowStatus.InDisputeAI
+        ) {
+            revert NotInDispute();
+        }
+
+        if (
+            winnerAddress != activeEscrow.fromAddress &&
+            winnerAddress != activeEscrow.toAddress
+        ) {
+            revert InvalidResponse();
+        }
+
+        EscrowAIDisputeInfo storage activeDispute = escrowtoDisputeAI[escrowID];
+
+        activeDispute.winnerAddress = winnerAddress;
+        activeDispute.resolveTime = block.timestamp;
+        activeEscrow.status = EscrowStatus.ResolvedAI;
+        escrowIDtoAIDispute[escrowID] = false;
+
+        emit DisputeResolvedByAI({
+            escrowID: escrowID,
+            winnerAddress: winnerAddress,
+            timeStamp: block.timestamp
+        });
+    }
+
+    /**
+     * @notice Claims the resolution of an AI dispute for the specified escrow ID.
+     * @dev This function allows the winner of an AI-resolved dispute to claim their funds.
+     *      The function ensures that the dispute has been resolved and the appeal time has passed.
+     * @param escrowID The unique identifier of the escrow transaction being claimed.
+     */
+    function claimAIDispute(uint256 escrowID) external {
+        Escrow storage activeEscrow = escrows[escrowID];
+
+        // Allow either party to trigger the payout to the AI winner
+        if (
+            msg.sender != activeEscrow.fromAddress &&
+            msg.sender != activeEscrow.toAddress
+        ) {
+            revert YouAreNotAuthorized();
+        }
+
+        if (activeEscrow.status != EscrowStatus.ResolvedAI) {
+            revert NotInDispute();
+        }
+
+        EscrowAIDisputeInfo memory activeDisputeAI = escrowtoDisputeAI[
+            escrowID
+        ];
+
+        // Enforce appeal window: must be AFTER resolveTime + APPEAL_TIME
+        if (
+            block.timestamp <
+            activeDisputeAI.resolveTime + APPEAL_TIME_DISPUTE_AI
+        ) {
+            revert AppealTimeNotPassedYet();
+        }
+
+        if (activeDisputeAI.winnerAddress == address(0)) {
+            revert WinnnerNotRevealedYet();
+        }
+
+        if (activeDisputeAI.winnerAddress == activeEscrow.fromAddress) {
+            activeEscrow.status = EscrowStatus.Refunded;
+            IERC20(activeEscrow.tokenAddress).safeTransfer(
+                activeDisputeAI.winnerAddress,
+                (activeEscrow.tokenAmount)
+            );
+        } else if (activeDisputeAI.winnerAddress == activeEscrow.toAddress) {
+            activeEscrow.status = EscrowStatus.Released;
+            uint256 feeAmount = (activeEscrow.tokenAmount *
+                activeEscrow.feeinPPM) / PPM;
+
+            IERC20(activeEscrow.tokenAddress).safeTransfer(
+                swapandBurnContract,
+                feeAmount
+            );
+
+            IERC20(activeEscrow.tokenAddress).safeTransfer(
+                activeDisputeAI.winnerAddress,
+                (activeEscrow.tokenAmount - feeAmount)
+            );
+        }
+
+        emit AI_DisputeClaimed({
+            escrowId: escrowID,
+            escrowIdStatus: activeEscrow.status
         });
     }
 
@@ -353,14 +635,42 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // ║                        Dispute Functions                           ║ //
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
+    /**
+     * @notice Creates a dispute for a specific escrow transaction.
+     * @dev This function allows a user to initiate a dispute for an escrow transaction
+     *      by providing the escrow ID and the disputed amount in USD.
+     * @param escrowID The unique identifier of the escrow transaction to dispute.
+     * @param amountinUSD The amount in USD that is being disputed.
+     */
     function CreateDispute(uint256 escrowID, uint256 amountinUSD) external {
         Escrow storage activeEscrow = escrows[escrowID];
 
         if (
-            activeEscrow.fromAddress != msg.sender ||
+            activeEscrow.fromAddress != msg.sender &&
             activeEscrow.toAddress != msg.sender
         ) {
             revert YouAreNotAuthorized();
+        }
+
+        // Allow Submitted/Denied directly, or ResolvedAI within appeal window by AI loser
+        if (
+            activeEscrow.status == EscrowStatus.Submitted ||
+            activeEscrow.status == EscrowStatus.Denied
+        ) {
+            // ok
+        } else if (activeEscrow.status == EscrowStatus.ResolvedAI) {
+            EscrowAIDisputeInfo memory ai = escrowtoDisputeAI[escrowID];
+            if (block.timestamp > ai.resolveTime + APPEAL_TIME_DISPUTE_AI) {
+                revert AppealWindowOver();
+            }
+            address loser = ai.winnerAddress == activeEscrow.fromAddress
+                ? activeEscrow.toAddress
+                : activeEscrow.fromAddress;
+            if (msg.sender != loser) {
+                revert YouAreNotAuthorized();
+            }
+        } else {
+            revert OnlySubmittedOneAreAllowed();
         }
 
         if (
@@ -420,19 +730,61 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             );
         }
 
-        escrowtoDispute[escrowID] = EscrowDisputeInfo({
+        escrowtoDisputeOracle[escrowID] = EscrowDisputeInfo({
             disputeContract: disputeAddress,
             winnerAddress: address(0),
             status: DisputeStatus.InVoting
         });
 
-        activeEscrow.status = EscrowStatus.InDispute;
+        activeEscrow.status = EscrowStatus.InDisputeOracle;
 
-        //TODO :event will be added heree
+        emit DisputeOracleCreated(escrowID, msg.sender);
+    }
+
+    function submitProofAgain(
+        uint256 escrowID,
+        string calldata proofURI
+    ) external {
+        Escrow memory activeEscrow = escrows[escrowID];
+
+        if (
+            activeEscrow.fromAddress != msg.sender ||
+            activeEscrow.toAddress != msg.sender
+        ) {
+            revert YouAreNotAuthorized();
+        }
+
+        if (activeEscrow.status != EscrowStatus.InDisputeOracle) {
+            revert NotInDispute();
+        }
+
+        EscrowDisputeInfo memory activeDispute = escrowtoDisputeOracle[
+            escrowID
+        ];
+
+        (, , address winnerAddress) = ITomiDispute(
+            activeDispute.disputeContract
+        ).calculateWinnerReadOnly();
+
+        if (winnerAddress != address(0)) {
+            revert WinnnerRevealed();
+        }
+
+        ITomiDispute(activeDispute.disputeContract).submitProof(
+            msg.sender,
+            proofURI
+        );
+
+        emit ProofSubmitted(
+            escrowID,
+            activeDispute.disputeContract,
+            msg.sender,
+            proofURI
+        );
     }
 
     // need to add the signature here
-    function resolveDispute(uint256 escrowID) public {
+    function resolveDisputeOracle(uint256 escrowID) external {
         Escrow storage activeEscrow = escrows[escrowID];
 
         if (
@@ -442,15 +794,23 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert YouAreNotAuthorized();
         }
 
-        if (activeEscrow.status != EscrowStatus.InDispute) {
+        if (activeEscrow.status != EscrowStatus.InDisputeOracle) {
             revert NotInDispute();
         }
 
-        EscrowDisputeInfo storage activeDispute = escrowtoDispute[escrowID];
+        EscrowDisputeInfo storage activeDispute = escrowtoDisputeOracle[
+            escrowID
+        ];
 
-        (, , address winnerAddress) = ITomiDispute(
-            activeDispute.disputeContract
-        ).calculateWinnerReadOnly();
+        address winnerAddress;
+        try
+            ITomiDispute(activeDispute.disputeContract)
+                .calculateWinnerReadOnly()
+        returns (uint256, uint256, address _winnerAddress) {
+            winnerAddress = _winnerAddress;
+        } catch {
+            revert WinnnerNotRevealedYet();
+        }
 
         if (winnerAddress == address(0)) {
             revert WinnnerNotRevealedYet();
@@ -483,8 +843,97 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             );
         }
 
-        //TODO :event will be added heree
+        emit DisputeResolvedByOracle({
+            escrowID: escrowID,
+            disputeContract: activeDispute.disputeContract,
+            winnerAddress: winnerAddress,
+            timeStamp: block.timestamp
+        });
     }
+
+    // ╔════════════════════════════════════════════════════════════════════╗ //
+    // ║                     Admin Only Functions                           ║ //
+    // ╚════════════════════════════════════════════════════════════════════╝ //
+
+    function updateFeeWallet(address _feeWalletAddress) external onlyOwner {
+        if (_feeWalletAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (_feeWalletAddress == feeWallet) {
+            revert SameAsLastOne();
+        }
+
+        feeWallet = _feeWalletAddress;
+
+        //TODO:  add  event  here
+    }
+
+    function updateSwapAndBurnContract(
+        address _swapAndBurnAddress
+    ) external onlyOwner {
+        if (_swapAndBurnAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (swapandBurnContract == _swapAndBurnAddress) {
+            revert SameAsLastOne();
+        }
+
+        swapandBurnContract = _swapAndBurnAddress;
+
+        //TODO:  add  event  here
+    }
+
+    function updateTomiDisputeAddress(
+        address _updatedTomiDisputeAddress
+    ) external onlyOwner {
+        if (_updatedTomiDisputeAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (_updatedTomiDisputeAddress == address(tomiDisputeAddress)) {
+            revert SameAsLastOne();
+        }
+
+        tomiDisputeAddress = ITomiDispute(_updatedTomiDisputeAddress);
+
+        //TODO:  add  event  here
+    }
+
+    function updateResolverAddress(
+        address _updatedResolverAddress
+    ) external onlyOwner {
+        if (_updatedResolverAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (_updatedResolverAddress == address(resolverAI)) {
+            revert SameAsLastOne();
+        }
+
+        resolverAI = _updatedResolverAddress;
+
+        //TODO:  add  event  here
+    }
+
+    function updateResolverFee(uint256 _updatedResolverFee) external onlyOwner {
+        if (_updatedResolverFee == 0) {
+            revert ZeroAmount();
+        }
+
+        if (_updatedResolverFee == resolverFeeAI) {
+            revert SameAsLastOne();
+        }
+
+        resolverFeeAI = _updatedResolverFee;
+
+        //TODO:  add  event  here
+    }
+
+    // ╔════════════════════════════════════════════════════════════════════╗ //
+    // ║                     Internal Functions                             ║ //
+    // ╚════════════════════════════════════════════════════════════════════╝ //
 
     function _authorizeUpgrade(
         address newImplementation
