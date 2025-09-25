@@ -3,6 +3,8 @@ pragma solidity 0.8.29;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable, Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ITomiDispute} from "./Interfaces/ITomiDispute.sol";
 
@@ -18,9 +20,11 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     address public swapandBurnContract;
     address public usdtToken;
     address public resolverAI;
+    address public signer;
 
     uint256 public escrowId;
     uint256 public resolverFeeAI;
+    uint256 public totalEscrowFeeCollected;
 
     uint256 public constant PPM = 1_000_000; //100 %
     uint256 public constant escrowPlatformFee = 10_000; //1%
@@ -112,6 +116,9 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     error AppealTimeNotPassedYet();
     error InvalidResponse();
     error AppealWindowOver();
+    error SignExpired();
+    error InvalidSignature();
+    error SignatureUsed();
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Events                                 ║ //
@@ -154,6 +161,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // ║                             Mappings                               ║ //
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
+    mapping(bytes => bool) public signatureUsed;
     mapping(uint256 escrowID => Escrow escrow) public escrows;
     mapping(uint256 escrowID => bool created) public escrowIDtoAIDispute;
     mapping(uint256 escrowID => EscrowAIDisputeInfo escrowDisputAI)
@@ -181,6 +189,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address tomiDisputeaddress,
         address usdtAddress,
         address resolverAIAddress,
+        address signerAddress,
         uint256 resolverFeeAmount
     ) external initializer {
         if (
@@ -188,7 +197,8 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             swapandBurnContractAddress == address(0) ||
             tomiDisputeaddress == address(0) ||
             usdtAddress == address(0) ||
-            resolverAIAddress == address(0)
+            resolverAIAddress == address(0) || 
+            signerAddress == address(0)
         ) {
             revert ZeroAddress();
         }
@@ -206,6 +216,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         usdtToken = usdtAddress;
         resolverAI = resolverAIAddress;
         resolverFeeAI = resolverFeeAmount;
+        signer = signerAddress;
     }
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
@@ -237,7 +248,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert ZeroAddress();
         }
 
-        if (amountInUSDT == 0 || feeinPPM == 0) {
+        if (amountInUSDT == 0 || feeinPPM == 0 || feeinPPM > PPM) {
             revert ZeroAmount();
         }
 
@@ -274,6 +285,11 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         });
 
         Escrow memory activeEscrow = escrows[escrowId];
+
+        totalEscrowFeeCollected =
+            totalEscrowFeeCollected +
+            (amountInUSDT * escrowPlatformFee) /
+            PPM;
 
         //transfer fee of the escrow + the amount in usdtToken to this address
         IERC20(tokenAddress).safeTransferFrom(
@@ -522,18 +538,52 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         emit DipsuteAICreated(escrowID, msg.sender);
     }
 
-    //NEED TO ADD THE SIGN HERE IN BELOW FUNCTION
-
     /**
      * @notice Resolves an escrow dispute via AI for the specified escrow ID.
      * @dev This function is called by the AI resolver to determine the winner of the dispute.
-     *      The function ensures that the caller is the authorized AI resolver and that the escrow is in dispute.
+     *      It verifies the signature, ensures the caller is the authorized AI resolver, and checks the escrow's dispute status.
+     *      The winner is determined based on the provided address, and the escrow status is updated accordingly.
      * @param escrowID The unique identifier of the escrow transaction being resolved.
      * @param winnerAddress The address of the party determined to be the winner of the dispute.
+     * @param deadline The timestamp by which the signature must be valid.
+     * @param signature The cryptographic signature verifying the authenticity of the resolution.
      */
-    function resolveViaAI(uint256 escrowID, address winnerAddress) external {
+    function resolveViaAI(
+        uint256 escrowID,
+        address winnerAddress,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        if (block.timestamp > deadline) {
+            revert SignExpired();
+        }
+
         if (msg.sender != resolverAI) {
             revert YouAreNotAuthorized();
+        }
+
+        if (signatureUsed[signature]) {
+            revert SignatureUsed();
+        }
+
+        signatureUsed[signature] = true;
+
+        if (
+            !_isValidSignature(
+                signer,
+                keccak256(
+                    abi.encodePacked(
+                        escrowID,
+                        winnerAddress,
+                        msg.sender,
+                        deadline,
+                        address(this)
+                    )
+                ),
+                signature
+            )
+        ) {
+            revert InvalidSignature();
         }
 
         Escrow storage activeEscrow = escrows[escrowID];
@@ -686,17 +736,24 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         }
 
         uint256 oracleFee;
+        uint256 loyaltyFee;
 
         if (activeEscrow.disputeType == DisputeType.MiniDispute) {
             oracleFee =
                 amountinUSD +
                 (activeEscrow.tokenAmount * miniDisputeDealSizeFee) /
                 PPM; //0.5%  of dealsize
+            loyaltyFee =
+                (activeEscrow.tokenAmount * miniDisputeDealSizeFee) /
+                PPM;
         } else if (activeEscrow.disputeType == DisputeType.RegularDispute) {
             oracleFee =
                 amountinUSD +
                 (activeEscrow.tokenAmount * regularDisputeDealSizeFee) /
                 PPM; // 0.25%  of the dealsize
+            loyaltyFee =
+                (activeEscrow.tokenAmount * regularDisputeDealSizeFee) /
+                PPM;
         }
 
         if (
@@ -717,7 +774,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 activeEscrow.toAddress, // the one who is creator of dispute
                 activeEscrow.submissionURI,
                 activeEscrow.tokenAmount, // dealsize
-                (activeEscrow.tokenAmount * regularDisputeDealSizeFee) / PPM //loyalty Fee
+                loyaltyFee
             );
         } else if (msg.sender == activeEscrow.fromAddress) {
             disputeAddress = tomiDisputeAddress.createTomiDispute(
@@ -726,7 +783,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 activeEscrow.fromAddress, // the one who is creator of dispute
                 activeEscrow.escrowDetialsURI,
                 activeEscrow.tokenAmount, // dealsize
-                (activeEscrow.tokenAmount * regularDisputeDealSizeFee) / PPM //loyalty Fee
+                loyaltyFee
             );
         }
 
@@ -741,6 +798,14 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         emit DisputeOracleCreated(escrowID, msg.sender);
     }
 
+    /**
+     * @notice Allows a user to submit proof again for a specific escrow in dispute.
+     * @dev This function enables the submission of additional proof for an escrow
+     *      that is currently in dispute via the oracle mechanism.
+     *      The caller must be either the creator or the recipient of the escrow.
+     * @param escrowID The unique identifier of the escrow for which proof is being submitted.
+     * @param proofURI The URI containing the proof details to be submitted.
+     */
     function submitProofAgain(
         uint256 escrowID,
         string calldata proofURI
@@ -748,7 +813,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         Escrow memory activeEscrow = escrows[escrowID];
 
         if (
-            activeEscrow.fromAddress != msg.sender ||
+            activeEscrow.fromAddress != msg.sender &&
             activeEscrow.toAddress != msg.sender
         ) {
             revert YouAreNotAuthorized();
@@ -783,12 +848,49 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         );
     }
 
-    // need to add the signature here
-    function resolveDisputeOracle(uint256 escrowID) external {
+    /**
+     * @notice Resolves a dispute for a specific escrow identified by `escrowID` using an oracle's decision.
+     * @dev This function requires a valid signature from the oracle to verify the resolution.
+     * @param escrowID The unique identifier of the escrow for which the dispute is being resolved.
+     * @param deadline The timestamp until which the provided signature is valid.
+     * @param signature The cryptographic signature provided by the oracle to authorize the dispute resolution.
+     */
+    function resolveDisputeOracle(
+        uint256 escrowID,
+        uint256 deadline,
+        bytes calldata signature
+    ) external {
+        if (block.timestamp > deadline) {
+            revert SignExpired();
+        }
+
+        if (signatureUsed[signature]) {
+            revert SignatureUsed();
+        }
+
+        signatureUsed[signature] = true;
+
+        if (
+            !_isValidSignature(
+                signer,
+                keccak256(
+                    abi.encodePacked(
+                        escrowID,
+                        msg.sender,
+                        deadline,
+                        address(this)
+                    )
+                ),
+                signature
+            )
+        ) {
+            revert InvalidSignature();
+        }
+
         Escrow storage activeEscrow = escrows[escrowID];
 
         if (
-            activeEscrow.fromAddress != msg.sender ||
+            activeEscrow.fromAddress != msg.sender &&
             activeEscrow.toAddress != msg.sender
         ) {
             revert YouAreNotAuthorized();
@@ -803,6 +905,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         ];
 
         address winnerAddress;
+
         try
             ITomiDispute(activeDispute.disputeContract)
                 .calculateWinnerReadOnly()
@@ -938,4 +1041,15 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
+
+    function _isValidSignature(
+        address authority,
+        bytes32 generatedHash,
+        bytes calldata signature
+    ) private pure returns (bool) {
+        bytes32 signedHash = MessageHashUtils.toEthSignedMessageHash(
+            generatedHash
+        );
+        return ECDSA.recover(signedHash, signature) == authority;
+    }
 }
