@@ -6,6 +6,7 @@ import {EscrowPayment} from "../src/EscrowPayment.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {MockUSDT} from "./mocks/MockUSDT.sol";
 import {MockTomiDispute} from "./mocks/MockTomiDispute.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract EscrowPaymentTest is Test {
     EscrowPayment public escrow;
@@ -18,11 +19,16 @@ contract EscrowPaymentTest is Test {
     address internal swapAndBurn;
     address internal resolverAI;
     address internal signer;
+    uint256 internal signerPk;
 
     uint256 internal constant PPM = 1_000_000;
     uint256 internal constant PLATFORM_FEE_PPM = 10_000; // 1%
     uint256 internal constant DEFAULT_FEE_PPM = 50_000; // 5%
     uint256 internal constant RESOLVER_FEE = 1e6; // 1 USDT
+    uint256 internal constant MINI_DISPUTE_FEE_PPM = 5_000; // 0.5%
+    uint256 internal constant REGULAR_DISPUTE_FEE_PPM = 2_500; // 0.25%
+    uint256 internal constant MIN_MINI_DISPUTE_AMOUNT = 15 * 1e6;
+    uint256 internal constant MIN_REGULAR_DISPUTE_AMOUNT = 400 * 1e6;
 
     function setUp() public {
         alice = makeAddr("alice");
@@ -30,7 +36,8 @@ contract EscrowPaymentTest is Test {
         feeWallet = makeAddr("feeWallet");
         swapAndBurn = makeAddr("swapAndBurn");
         resolverAI = makeAddr("resolverAI");
-        signer = makeAddr("signer");
+        signerPk = 0xBEEF;
+        signer = vm.addr(signerPk);
 
         usdt = new MockUSDT();
         tomiDispute = new MockTomiDispute();
@@ -54,18 +61,53 @@ contract EscrowPaymentTest is Test {
         escrow = EscrowPayment(address(escrowPayProxy));
     }
 
-    function _createEscrow(
+    function _signAIResolution(
+        uint256 escrowID,
+        address winner,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                escrowID,
+                winner,
+                resolverAI,
+                deadline,
+                address(escrow)
+            )
+        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
+            messageHash
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, ethHash);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _signOracleResolution(
+        uint256 escrowID,
+        address caller,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(escrowID, caller, deadline, address(escrow))
+        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
+            messageHash
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, ethHash);
+        return abi.encodePacked(r, s, v);
+    }
+
+
+    function _createEscrowWithType(
         uint256 amount,
         uint256 feePpm,
-        uint256 deadline
+        uint256 deadline,
+        EscrowPayment.DisputeType disputeType
     ) internal returns (uint256 id) {
-        // fund alice
         uint256 platformFee = (amount * PLATFORM_FEE_PPM) / PPM;
         usdt.mint(alice, amount + platformFee);
-        // approvals
         vm.prank(alice);
         usdt.approve(address(escrow), amount + platformFee);
-        // create
         vm.prank(alice);
         escrow.CreateEscrow(
             "ipfs://details",
@@ -74,9 +116,22 @@ contract EscrowPaymentTest is Test {
             amount,
             feePpm,
             deadline,
-            EscrowPayment.DisputeType.RegularDispute
+            disputeType
         );
         id = escrow.escrowId();
+    }
+
+    function _createEscrow(
+        uint256 amount,
+        uint256 feePpm,
+        uint256 deadline
+    ) internal returns (uint256 id) {
+        id = _createEscrowWithType(
+            amount,
+            feePpm,
+            deadline,
+            EscrowPayment.DisputeType.RegularDispute
+        );
     }
 
     function _accept(uint256 id) internal {
@@ -87,6 +142,110 @@ contract EscrowPaymentTest is Test {
     function _submit(uint256 id, string memory uri) internal {
         vm.prank(bob);
         escrow.SubmitEscrow(id, uri);
+    }
+
+    function _prepareAIDispute(
+        uint256 amount,
+        uint256 feePpm,
+        string memory submissionUri
+    ) internal returns (uint256 id) {
+        id = _createEscrow(
+            amount,
+            feePpm,
+            block.timestamp + 5 days
+        );
+        _accept(id);
+        _submit(id, submissionUri);
+
+        usdt.mint(bob, RESOLVER_FEE);
+        vm.prank(bob);
+        usdt.approve(address(escrow), RESOLVER_FEE);
+        vm.prank(bob);
+        escrow.createAIDispute(id, RESOLVER_FEE);
+    }
+
+    function _getEscrowStatus(uint256 id)
+        internal
+        view
+        returns (EscrowPayment.EscrowStatus)
+    {
+        EscrowPayment.EscrowStatus status;
+        EscrowPayment.DisputeType disputeType;
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            status,
+            disputeType
+        ) = escrow.escrows(id);
+        disputeType;
+        return status;
+    }
+
+    function _getAIInfo(uint256 id)
+        internal
+        view
+        returns (EscrowPayment.EscrowAIDisputeInfo memory)
+    {
+        (uint256 storedId, uint256 resolveTime, address winner) = escrow
+            .escrowtoDisputeAI(id);
+        return EscrowPayment.EscrowAIDisputeInfo({
+            escrowID: storedId,
+            resolveTime: resolveTime,
+            winnerAddress: winner
+        });
+    }
+
+    function _computeOracleFees(
+        uint256 amount,
+        uint256 amountInUSD,
+        EscrowPayment.DisputeType disputeType
+    ) internal pure returns (uint256 oracleFee, uint256 loyaltyFee) {
+        uint256 feeRate = disputeType == EscrowPayment.DisputeType.MiniDispute
+            ? MINI_DISPUTE_FEE_PPM
+            : REGULAR_DISPUTE_FEE_PPM;
+        loyaltyFee = (amount * feeRate) / PPM;
+        oracleFee = amountInUSD + loyaltyFee;
+    }
+
+    function _openOracleDispute(
+        EscrowPayment.DisputeType disputeType,
+        address initiator,
+        uint256 amount,
+        uint256 feePpm,
+        uint256 amountInUSD,
+        string memory submissionUri
+    )
+        internal
+        returns (uint256 id, uint256 oracleFee, uint256 loyaltyFee)
+    {
+        id = _createEscrowWithType(
+            amount,
+            feePpm,
+            block.timestamp + 5 days,
+            disputeType
+        );
+        _accept(id);
+        _submit(id, submissionUri);
+
+        (oracleFee, loyaltyFee) = _computeOracleFees(
+            amount,
+            amountInUSD,
+            disputeType
+        );
+
+        usdt.mint(initiator, oracleFee);
+        vm.prank(initiator);
+        usdt.approve(address(tomiDispute), oracleFee);
+
+        vm.prank(initiator);
+        escrow.CreateDispute(id, amountInUSD);
     }
 
     function test_CreateEscrow_RevertsOnPastOrNowDeadline() public {
@@ -525,37 +684,338 @@ contract EscrowPaymentTest is Test {
         escrow.createAIDispute(id2, RESOLVER_FEE);
     }
 
-    // function test_AIDispute_ClaimAfterAppealWindowPaysWinner() public {
-    //     uint256 amount = 9_000_000;
-    //     uint256 feePpm = 40_000; // 4%
-    //     uint256 id = _createEscrow(amount, feePpm, block.timestamp + 4 days);
-    //     _accept(id);
-    //     _submit(id, "ipfs://job");
+    function test_AIDispute_ResolveViaAIRequiresValidSignature() public {
+        uint256 id = _prepareAIDispute(
+            4_000_000,
+            DEFAULT_FEE_PPM,
+            "ipfs://submission"
+        );
 
-    //     // responder opens AI dispute
-    //     usdt.mint(bob, RESOLVER_FEE);
-    //     vm.prank(bob);
-    //     usdt.approve(address(escrow), RESOLVER_FEE);
-    //     vm.prank(bob);
-    //     escrow.createAIDispute(id, RESOLVER_FEE);
+        uint256 deadline = block.timestamp + 1 hours;
 
-    //     // resolver sets winner as responder
-    //     vm.prank(resolverAI);
-    //     escrow.resolveViaAI(id, bob);
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(
+                id,
+                bob,
+                resolverAI,
+                deadline,
+                address(escrow)
+            )
+        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
+            messageHash
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xA11CE, ethHash);
+        bytes memory invalidSig = abi.encodePacked(r, s, v);
 
-    //     // cannot claim before appeal time
-    //     vm.prank(bob);
-    //     vm.expectRevert(EscrowPayment.AppealTimeNotPassedYet.selector);
-    //     escrow.claimAIDispute(id);
+        vm.prank(resolverAI);
+        vm.expectRevert(EscrowPayment.InvalidSignature.selector);
+        escrow.resolveViaAI(id, bob, deadline, invalidSig);
 
-    //     // pass appeal window, then claim; fee split applied
-    //     vm.warp(block.timestamp + 1 hours);
-    //     vm.prank(bob);
-    //     escrow.claimAIDispute(id);
+        bytes memory validSig = _signAIResolution(id, bob, deadline);
 
-    //     uint256 fee = (amount * feePpm) / PPM;
-    //     assertEq(usdt.balanceOf(swapAndBurn), fee);
-    //     assertEq(usdt.balanceOf(bob), amount - fee);
-    //     assertEq(usdt.balanceOf(address(escrow)), 0);
-    // }
+        vm.prank(resolverAI);
+        escrow.resolveViaAI(id, bob, deadline, validSig);
+
+        EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.EscrowStatus.ResolvedAI)
+        );
+
+        EscrowPayment.EscrowAIDisputeInfo memory info = _getAIInfo(id);
+        assertEq(info.winnerAddress, bob);
+        assertTrue(info.resolveTime != 0);
+        assertFalse(escrow.escrowIDtoAIDispute(id));
+    }
+
+    function test_AIDispute_ClaimBeforeAppealWindowReverts() public {
+        uint256 id = _prepareAIDispute(
+            5_000_000,
+            DEFAULT_FEE_PPM,
+            "ipfs://sub"
+        );
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAIResolution(id, bob, deadline);
+
+        vm.prank(resolverAI);
+        escrow.resolveViaAI(id, bob, deadline, sig);
+
+        vm.prank(bob);
+        vm.expectRevert(EscrowPayment.AppealTimeNotPassedYet.selector);
+        escrow.claimAIDispute(id);
+    }
+
+    function test_AIDispute_ClaimAfterAppealWindowPaysResponder() public {
+        uint256 amount = 9_000_000;
+        uint256 feePpm = 40_000;
+        uint256 id = _prepareAIDispute(
+            amount,
+            feePpm,
+            "ipfs://job"
+        );
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAIResolution(id, bob, deadline);
+
+        vm.prank(resolverAI);
+        escrow.resolveViaAI(id, bob, deadline, sig);
+
+        EscrowPayment.EscrowAIDisputeInfo memory info = _getAIInfo(id);
+
+        vm.warp(info.resolveTime + escrow.APPEAL_TIME_DISPUTE_AI() + 1);
+
+        uint256 fee = (amount * feePpm) / PPM;
+
+        vm.prank(bob);
+        escrow.claimAIDispute(id);
+
+        assertEq(usdt.balanceOf(swapAndBurn), fee);
+        assertEq(usdt.balanceOf(bob), amount - fee);
+        assertEq(usdt.balanceOf(address(escrow)), 0);
+
+        EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.EscrowStatus.Released)
+        );
+    }
+
+    function test_AIDispute_ClaimAfterAppealRefundsCreatorWhenAIWinner() public {
+        uint256 amount = 7_500_000;
+        uint256 id = _prepareAIDispute(
+            amount,
+            DEFAULT_FEE_PPM,
+            "ipfs://design"
+        );
+
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAIResolution(id, alice, deadline);
+
+        vm.prank(resolverAI);
+        escrow.resolveViaAI(id, alice, deadline, sig);
+
+        EscrowPayment.EscrowAIDisputeInfo memory info = _getAIInfo(id);
+
+        vm.warp(info.resolveTime + escrow.APPEAL_TIME_DISPUTE_AI() + 1);
+
+        uint256 aliceBalanceBefore = usdt.balanceOf(alice);
+
+        vm.prank(alice);
+        escrow.claimAIDispute(id);
+
+        assertEq(usdt.balanceOf(alice), aliceBalanceBefore + amount);
+        assertEq(usdt.balanceOf(swapAndBurn), 0);
+        assertEq(usdt.balanceOf(address(escrow)), 0);
+
+        EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.EscrowStatus.Refunded)
+        );
+    }
+
+    // ===== Oracle dispute tests =====
+    function test_OracleDispute_CreateDisputeSetsStateAndLoyaltyFee() public {
+        uint256 amount = 8_000_000;
+        uint256 amountInUSD = MIN_MINI_DISPUTE_AMOUNT + 5 * 1e6;
+
+        (
+            uint256 id,
+            uint256 oracleFee,
+            uint256 loyaltyFee
+        ) = _openOracleDispute(
+                EscrowPayment.DisputeType.MiniDispute,
+                bob,
+                amount,
+                DEFAULT_FEE_PPM,
+                amountInUSD,
+                "ipfs://mini"
+            );
+
+        (address disputeAddress, address winner, EscrowPayment.DisputeStatus status) = escrow
+            .escrowtoDisputeOracle(id);
+
+        assertEq(disputeAddress, address(tomiDispute));
+        assertEq(winner, address(0));
+        assertEq(uint256(status), uint256(EscrowPayment.DisputeStatus.InVoting));
+
+        assertEq(tomiDispute.lastDisputeCreator(), bob);
+        assertEq(tomiDispute.lastDisputedAddress(), alice);
+        assertEq(tomiDispute.lastLoyaltyFee(), loyaltyFee);
+        uint256 expectedLoyalty = (amount * MINI_DISPUTE_FEE_PPM) / PPM;
+        assertEq(loyaltyFee, expectedLoyalty);
+        assertEq(oracleFee, amountInUSD + expectedLoyalty);
+        assertEq(
+            usdt.allowance(bob, address(tomiDispute)),
+            oracleFee
+        );
+
+        EscrowPayment.EscrowStatus escrowStatus = _getEscrowStatus(id);
+        assertEq(
+            uint256(escrowStatus),
+            uint256(EscrowPayment.EscrowStatus.InDisputeOracle)
+        );
+    }
+
+    function test_OracleDispute_SubmitProofAgainRecordsProofAndBlocksAfterWinner()
+        public
+    {
+        (uint256 id,,) = _openOracleDispute(
+            EscrowPayment.DisputeType.RegularDispute,
+            bob,
+            9_000_000,
+            DEFAULT_FEE_PPM,
+            MIN_REGULAR_DISPUTE_AMOUNT,
+            "ipfs://regular"
+        );
+
+        vm.prank(alice);
+        escrow.submitProofAgain(id, "ipfs://proof1");
+        assertEq(tomiDispute.lastProofSubmitter(), alice);
+        assertEq(tomiDispute.lastProofURI(), "ipfs://proof1");
+
+        vm.prank(bob);
+        escrow.submitProofAgain(id, "ipfs://proof2");
+        assertEq(tomiDispute.lastProofSubmitter(), bob);
+        assertEq(tomiDispute.lastProofURI(), "ipfs://proof2");
+
+        tomiDispute.setWinner(bob);
+
+        vm.prank(alice);
+        vm.expectRevert(EscrowPayment.WinnnerRevealed.selector);
+        escrow.submitProofAgain(id, "ipfs://proof3");
+    }
+
+    function test_OracleDispute_ResolveViaOracleRequiresValidSignature() public {
+        uint256 amount = 10_000_000;
+        (uint256 id,,) = _openOracleDispute(
+            EscrowPayment.DisputeType.RegularDispute,
+            bob,
+            amount,
+            DEFAULT_FEE_PPM,
+            MIN_REGULAR_DISPUTE_AMOUNT + 50 * 1e6,
+            "ipfs://regular-resolve"
+        );
+
+        tomiDispute.setWinner(bob);
+
+        uint256 deadline = block.timestamp + 2 hours;
+
+        {
+            bytes32 messageHash = keccak256(
+                abi.encodePacked(id, alice, deadline, address(escrow))
+            );
+            bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
+                messageHash
+            );
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xA11CE, ethHash);
+            bytes memory badSig = abi.encodePacked(r, s, v);
+
+            vm.prank(alice);
+            vm.expectRevert(EscrowPayment.InvalidSignature.selector);
+            escrow.resolveDisputeOracle(id, deadline, badSig);
+        }
+
+        bytes memory sig = _signOracleResolution(id, alice, deadline);
+
+        uint256 bobBalanceBefore = usdt.balanceOf(bob);
+        uint256 swapBalanceBefore = usdt.balanceOf(swapAndBurn);
+
+        vm.prank(alice);
+        escrow.resolveDisputeOracle(id, deadline, sig);
+
+        EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.EscrowStatus.Released)
+        );
+
+        address disputeAddress;
+        address winner;
+        EscrowPayment.DisputeStatus disputeStatus;
+        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(id);
+        assertEq(disputeAddress, address(tomiDispute));
+        assertEq(winner, bob);
+        assertEq(uint256(disputeStatus), uint256(EscrowPayment.DisputeStatus.Resolved));
+
+        uint256 feeAmount = (amount * DEFAULT_FEE_PPM) / PPM;
+        assertEq(usdt.balanceOf(swapAndBurn), swapBalanceBefore + feeAmount);
+        assertEq(
+            usdt.balanceOf(bob),
+            bobBalanceBefore + amount - feeAmount
+        );
+
+        vm.prank(alice);
+        vm.expectRevert(EscrowPayment.SignatureUsed.selector);
+        escrow.resolveDisputeOracle(id, deadline, sig);
+    }
+
+    function test_OracleDispute_ResolveViaOracleRefundsCreatorWhenWinner() public {
+        uint256 amount = 6_000_000;
+        (uint256 id,,) = _openOracleDispute(
+            EscrowPayment.DisputeType.RegularDispute,
+            alice,
+            amount,
+            DEFAULT_FEE_PPM,
+            MIN_REGULAR_DISPUTE_AMOUNT + 10 * 1e6,
+            "ipfs://creator"
+        );
+
+        tomiDispute.setWinner(alice);
+
+        uint256 deadline = block.timestamp + 90 minutes;
+        bytes memory sig = _signOracleResolution(id, alice, deadline);
+
+        uint256 aliceBalanceBefore = usdt.balanceOf(alice);
+
+        vm.prank(alice);
+        escrow.resolveDisputeOracle(id, deadline, sig);
+
+        EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.EscrowStatus.Refunded)
+        );
+
+        assertEq(usdt.balanceOf(alice), aliceBalanceBefore + amount);
+        assertEq(usdt.balanceOf(swapAndBurn), 0);
+
+        address disputeAddress;
+        address winner;
+        EscrowPayment.DisputeStatus disputeStatus;
+        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(id);
+        assertEq(disputeAddress, address(tomiDispute));
+        assertEq(winner, alice);
+        assertEq(uint256(disputeStatus), uint256(EscrowPayment.DisputeStatus.Resolved));
+    }
+
+    function test_OracleDispute_CreateDisputeRequiresAllowance() public {
+        uint256 amount = 7_000_000;
+        uint256 deadline = block.timestamp + 4 days;
+        uint256 id = _createEscrowWithType(
+            amount,
+            DEFAULT_FEE_PPM,
+            deadline,
+            EscrowPayment.DisputeType.RegularDispute
+        );
+        _accept(id);
+        _submit(id, "ipfs://allowance");
+
+        vm.prank(bob);
+        vm.expectRevert(EscrowPayment.InsufficientAllowance.selector);
+        escrow.CreateDispute(id, MIN_REGULAR_DISPUTE_AMOUNT);
+
+        uint256 oracleFee = MIN_REGULAR_DISPUTE_AMOUNT +
+            (amount * REGULAR_DISPUTE_FEE_PPM) /
+            PPM;
+        usdt.mint(bob, oracleFee);
+        vm.prank(bob);
+        usdt.approve(address(tomiDispute), oracleFee - 1);
+
+        vm.prank(bob);
+        vm.expectRevert(EscrowPayment.InsufficientAllowance.selector);
+        escrow.CreateDispute(id, MIN_REGULAR_DISPUTE_AMOUNT);
+    }
 }

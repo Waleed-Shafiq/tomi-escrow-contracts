@@ -6,6 +6,11 @@ import {ITomiDispute} from "../../src/Interfaces/ITomiDispute.sol";
 contract MockTomiDispute is ITomiDispute {
     address public lastDisputeCreator;
     address public lastDisputedAddress;
+    uint256 public lastLoyaltyFee;
+    address public storedWinner;
+    bool public revertOnWinner;
+    address public lastProofSubmitter;
+    string public lastProofURI;
 
     error EvmError();
 
@@ -15,21 +20,36 @@ contract MockTomiDispute is ITomiDispute {
         address disputor,
         string calldata,
         uint256,
-        uint256
+        uint256 loyaltyFee
     ) external override returns (address) {
         lastDisputeCreator = disputor;
         lastDisputedAddress = disputedAddress;
+        lastLoyaltyFee = loyaltyFee;
         return address(this);
     }
 
-    function submitProof(address, string memory) external override {}
+    function submitProof(address disputor, string memory proof) external override {
+        lastProofSubmitter = disputor;
+        lastProofURI = proof;
+    }
 
     function calculateWinnerReadOnly()
         external
-        pure
+        view
         override
         returns (uint256, uint256, address)
     {
-        return (0, 0, address(0));
+        if (revertOnWinner) {
+            revert EvmError();
+        }
+        return (0, 0, storedWinner);
+    }
+
+    function setWinner(address winner) external {
+        storedWinner = winner;
+    }
+
+    function setRevertOnWinner(bool shouldRevert) external {
+        revertOnWinner = shouldRevert;
     }
 }
