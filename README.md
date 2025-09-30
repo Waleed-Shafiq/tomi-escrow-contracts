@@ -98,4 +98,6 @@ forge script script/EscrowPayment.s.sol \
   --broadcast --verify
 
 Deployment Chain : Sepolia
-Deployment Address : 0xE39E5F51f3e79d801758a88d203527e07Ec2F53c : 0xE2C2093d15d13D1897B60EE95f439d3c0e9E7bd5
+Deployment Address : 
+Proxy : 0xE39E5F51f3e79d801758a88d203527e07Ec2F53c 
+Implementation: 0xE2C2093d15d13D1897B60EE95f439d3c0e9E7bd5
