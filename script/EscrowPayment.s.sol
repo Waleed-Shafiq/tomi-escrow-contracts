@@ -8,7 +8,8 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 contract CounterScript is Script {
     EscrowPayment public escrowPayment;
     address feeWalletAddress = 0xF35Ad8EeD264E7B7d5d21CF8452E8caB944678d6;
-    address swapandBurnContractAddress = 0xF35Ad8EeD264E7B7d5d21CF8452E8caB944678d6;
+    address swapandBurnContractAddress =
+        0xF35Ad8EeD264E7B7d5d21CF8452E8caB944678d6;
     address tomiDisputeaddress = 0xF35Ad8EeD264E7B7d5d21CF8452E8caB944678d6;
     address usdtAddress = 0x6fEA2f1b82aFC40030520a6C49B0d3b652A65915;
     address resolverAIAddress = 0xF35Ad8EeD264E7B7d5d21CF8452E8caB944678d6;
@@ -41,7 +42,10 @@ contract CounterScript is Script {
         );
 
         escrowPayment = EscrowPayment(address(escrowPaymentProxy));
-        console.log("escrowPayment implementation deployed at:", address(implementation));
+        console.log(
+            "escrowPayment implementation deployed at:",
+            address(implementation)
+        );
         console.log("escrowPayment proxy deployed at:", address(escrowPayment));
         vm.stopBroadcast();
     }

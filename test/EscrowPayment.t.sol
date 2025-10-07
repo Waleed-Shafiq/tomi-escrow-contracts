@@ -75,9 +75,7 @@ contract EscrowPaymentTest is Test {
                 address(escrow)
             )
         );
-        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
-            messageHash
-        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, ethHash);
         return abi.encodePacked(r, s, v);
     }
@@ -90,13 +88,10 @@ contract EscrowPaymentTest is Test {
         bytes32 messageHash = keccak256(
             abi.encodePacked(escrowID, caller, deadline, address(escrow))
         );
-        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
-            messageHash
-        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPk, ethHash);
         return abi.encodePacked(r, s, v);
     }
-
 
     function _createEscrowWithType(
         uint256 amount,
@@ -149,11 +144,7 @@ contract EscrowPaymentTest is Test {
         uint256 feePpm,
         string memory submissionUri
     ) internal returns (uint256 id) {
-        id = _createEscrow(
-            amount,
-            feePpm,
-            block.timestamp + 5 days
-        );
+        id = _createEscrow(amount, feePpm, block.timestamp + 5 days);
         _accept(id);
         _submit(id, submissionUri);
 
@@ -164,42 +155,27 @@ contract EscrowPaymentTest is Test {
         escrow.createAIDispute(id, RESOLVER_FEE);
     }
 
-    function _getEscrowStatus(uint256 id)
-        internal
-        view
-        returns (EscrowPayment.EscrowStatus)
-    {
+    function _getEscrowStatus(
+        uint256 id
+    ) internal view returns (EscrowPayment.EscrowStatus) {
         EscrowPayment.EscrowStatus status;
         EscrowPayment.DisputeType disputeType;
-        (
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            ,
-            status,
-            disputeType
-        ) = escrow.escrows(id);
+        (, , , , , , , , , , status, disputeType) = escrow.escrows(id);
         disputeType;
         return status;
     }
 
-    function _getAIInfo(uint256 id)
-        internal
-        view
-        returns (EscrowPayment.EscrowAIDisputeInfo memory)
-    {
+    function _getAIInfo(
+        uint256 id
+    ) internal view returns (EscrowPayment.EscrowAIDisputeInfo memory) {
         (uint256 storedId, uint256 resolveTime, address winner) = escrow
             .escrowtoDisputeAI(id);
-        return EscrowPayment.EscrowAIDisputeInfo({
-            escrowID: storedId,
-            resolveTime: resolveTime,
-            winnerAddress: winner
-        });
+        return
+            EscrowPayment.EscrowAIDisputeInfo({
+                escrowID: storedId,
+                resolveTime: resolveTime,
+                winnerAddress: winner
+            });
     }
 
     function _computeOracleFees(
@@ -221,10 +197,7 @@ contract EscrowPaymentTest is Test {
         uint256 feePpm,
         uint256 amountInUSD,
         string memory submissionUri
-    )
-        internal
-        returns (uint256 id, uint256 oracleFee, uint256 loyaltyFee)
-    {
+    ) internal returns (uint256 id, uint256 oracleFee, uint256 loyaltyFee) {
         id = _createEscrowWithType(
             amount,
             feePpm,
@@ -694,17 +667,9 @@ contract EscrowPaymentTest is Test {
         uint256 deadline = block.timestamp + 1 hours;
 
         bytes32 messageHash = keccak256(
-            abi.encodePacked(
-                id,
-                bob,
-                resolverAI,
-                deadline,
-                address(escrow)
-            )
+            abi.encodePacked(id, bob, resolverAI, deadline, address(escrow))
         );
-        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(
-            messageHash
-        );
+        bytes32 ethHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(0xA11CE, ethHash);
         bytes memory invalidSig = abi.encodePacked(r, s, v);
 
@@ -750,11 +715,7 @@ contract EscrowPaymentTest is Test {
     function test_AIDispute_ClaimAfterAppealWindowPaysResponder() public {
         uint256 amount = 9_000_000;
         uint256 feePpm = 40_000;
-        uint256 id = _prepareAIDispute(
-            amount,
-            feePpm,
-            "ipfs://job"
-        );
+        uint256 id = _prepareAIDispute(amount, feePpm, "ipfs://job");
 
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signAIResolution(id, bob, deadline);
@@ -776,13 +737,12 @@ contract EscrowPaymentTest is Test {
         assertEq(usdt.balanceOf(address(escrow)), 0);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
-        assertEq(
-            uint256(status),
-            uint256(EscrowPayment.EscrowStatus.Released)
-        );
+        assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Released));
     }
 
-    function test_AIDispute_ClaimAfterAppealRefundsCreatorWhenAIWinner() public {
+    function test_AIDispute_ClaimAfterAppealRefundsCreatorWhenAIWinner()
+        public
+    {
         uint256 amount = 7_500_000;
         uint256 id = _prepareAIDispute(
             amount,
@@ -810,10 +770,7 @@ contract EscrowPaymentTest is Test {
         assertEq(usdt.balanceOf(address(escrow)), 0);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
-        assertEq(
-            uint256(status),
-            uint256(EscrowPayment.EscrowStatus.Refunded)
-        );
+        assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Refunded));
     }
 
     // ===== Oracle dispute tests =====
@@ -834,12 +791,18 @@ contract EscrowPaymentTest is Test {
                 "ipfs://mini"
             );
 
-        (address disputeAddress, address winner, EscrowPayment.DisputeStatus status) = escrow
-            .escrowtoDisputeOracle(id);
+        (
+            address disputeAddress,
+            address winner,
+            EscrowPayment.DisputeStatus status
+        ) = escrow.escrowtoDisputeOracle(id);
 
         assertEq(disputeAddress, address(tomiDispute));
         assertEq(winner, address(0));
-        assertEq(uint256(status), uint256(EscrowPayment.DisputeStatus.InVoting));
+        assertEq(
+            uint256(status),
+            uint256(EscrowPayment.DisputeStatus.InVoting)
+        );
 
         assertEq(tomiDispute.lastDisputeCreator(), bob);
         assertEq(tomiDispute.lastDisputedAddress(), alice);
@@ -847,10 +810,7 @@ contract EscrowPaymentTest is Test {
         uint256 expectedLoyalty = (amount * MINI_DISPUTE_FEE_PPM) / PPM;
         assertEq(loyaltyFee, expectedLoyalty);
         assertEq(oracleFee, amountInUSD + expectedLoyalty);
-        assertEq(
-            usdt.allowance(bob, address(tomiDispute)),
-            oracleFee
-        );
+        assertEq(usdt.allowance(bob, address(tomiDispute)), oracleFee);
 
         EscrowPayment.EscrowStatus escrowStatus = _getEscrowStatus(id);
         assertEq(
@@ -862,7 +822,7 @@ contract EscrowPaymentTest is Test {
     function test_OracleDispute_SubmitProofAgainRecordsProofAndBlocksAfterWinner()
         public
     {
-        (uint256 id,,) = _openOracleDispute(
+        (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             bob,
             9_000_000,
@@ -888,9 +848,11 @@ contract EscrowPaymentTest is Test {
         escrow.submitProofAgain(id, "ipfs://proof3");
     }
 
-    function test_OracleDispute_ResolveViaOracleRequiresValidSignature() public {
+    function test_OracleDispute_ResolveViaOracleRequiresValidSignature()
+        public
+    {
         uint256 amount = 10_000_000;
-        (uint256 id,,) = _openOracleDispute(
+        (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             bob,
             amount,
@@ -927,34 +889,35 @@ contract EscrowPaymentTest is Test {
         escrow.resolveDisputeOracle(id, deadline, sig);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
-        assertEq(
-            uint256(status),
-            uint256(EscrowPayment.EscrowStatus.Released)
-        );
+        assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Released));
 
         address disputeAddress;
         address winner;
         EscrowPayment.DisputeStatus disputeStatus;
-        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(id);
+        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(
+            id
+        );
         assertEq(disputeAddress, address(tomiDispute));
         assertEq(winner, bob);
-        assertEq(uint256(disputeStatus), uint256(EscrowPayment.DisputeStatus.Resolved));
+        assertEq(
+            uint256(disputeStatus),
+            uint256(EscrowPayment.DisputeStatus.Resolved)
+        );
 
         uint256 feeAmount = (amount * DEFAULT_FEE_PPM) / PPM;
         assertEq(usdt.balanceOf(swapAndBurn), swapBalanceBefore + feeAmount);
-        assertEq(
-            usdt.balanceOf(bob),
-            bobBalanceBefore + amount - feeAmount
-        );
+        assertEq(usdt.balanceOf(bob), bobBalanceBefore + amount - feeAmount);
 
         vm.prank(alice);
         vm.expectRevert(EscrowPayment.SignatureUsed.selector);
         escrow.resolveDisputeOracle(id, deadline, sig);
     }
 
-    function test_OracleDispute_ResolveViaOracleRefundsCreatorWhenWinner() public {
+    function test_OracleDispute_ResolveViaOracleRefundsCreatorWhenWinner()
+        public
+    {
         uint256 amount = 6_000_000;
-        (uint256 id,,) = _openOracleDispute(
+        (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             alice,
             amount,
@@ -974,10 +937,7 @@ contract EscrowPaymentTest is Test {
         escrow.resolveDisputeOracle(id, deadline, sig);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
-        assertEq(
-            uint256(status),
-            uint256(EscrowPayment.EscrowStatus.Refunded)
-        );
+        assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Refunded));
 
         assertEq(usdt.balanceOf(alice), aliceBalanceBefore + amount);
         assertEq(usdt.balanceOf(swapAndBurn), 0);
@@ -985,10 +945,15 @@ contract EscrowPaymentTest is Test {
         address disputeAddress;
         address winner;
         EscrowPayment.DisputeStatus disputeStatus;
-        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(id);
+        (disputeAddress, winner, disputeStatus) = escrow.escrowtoDisputeOracle(
+            id
+        );
         assertEq(disputeAddress, address(tomiDispute));
         assertEq(winner, alice);
-        assertEq(uint256(disputeStatus), uint256(EscrowPayment.DisputeStatus.Resolved));
+        assertEq(
+            uint256(disputeStatus),
+            uint256(EscrowPayment.DisputeStatus.Resolved)
+        );
     }
 
     function test_OracleDispute_CreateDisputeRequiresAllowance() public {

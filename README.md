@@ -99,5 +99,7 @@ forge script script/EscrowPayment.s.sol \
 
 Deployment Chain : Sepolia
 Deployment Address : 
-Proxy : 0xE39E5F51f3e79d801758a88d203527e07Ec2F53c 
-Implementation: 0xE2C2093d15d13D1897B60EE95f439d3c0e9E7bd5
+EscrowPayment implementation deployed at: 0x0c34777eC2622f6190e1b4b5DdD72e7B654Fe5EC
+EscrowPayment proxy deployed at: 0x47165D0aA5a61CDD9094Bb3afd3D2f8101CcF110
+
+

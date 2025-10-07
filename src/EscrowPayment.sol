@@ -38,6 +38,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
     struct Escrow {
+        uint256 escrowID;
         string escrowDetialsURI;
         string submissionURI;
         address fromAddress;
@@ -197,7 +198,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             swapandBurnContractAddress == address(0) ||
             tomiDisputeaddress == address(0) ||
             usdtAddress == address(0) ||
-            resolverAIAddress == address(0) || 
+            resolverAIAddress == address(0) ||
             signerAddress == address(0)
         ) {
             revert ZeroAddress();
@@ -243,7 +244,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 feeinPPM,
         uint256 deadline,
         DisputeType disputeType
-    ) external {
+    ) external returns (uint256) {
         if (toAddress == address(0)) {
             revert ZeroAddress();
         }
@@ -271,6 +272,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         escrowId++;
 
         escrows[escrowId] = Escrow({
+            escrowID: escrowId,
             escrowDetialsURI: detailsURI,
             submissionURI: "",
             fromAddress: msg.sender,
@@ -308,6 +310,8 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             escrowdetails: activeEscrow,
             escrowFee: (amountInUSDT * escrowPlatformFee) / PPM
         });
+
+        return escrowId;
     }
 
     /**

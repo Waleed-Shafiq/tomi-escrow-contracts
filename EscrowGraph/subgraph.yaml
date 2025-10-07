@@ -1,0 +1,68 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: EscrowPayment
+    network: sepolia
+    source:
+      address: "0x0c34777eC2622f6190e1b4b5DdD72e7B654Fe5EC"
+      abi: EscrowPayment
+      startBlock: 9360707
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - AI_DisputeClaimed
+        - DipsuteAICreated
+        - DisputeOracleCreated
+        - DisputeResolvedByAI
+        - DisputeResolvedByOracle
+        - EscrowAccepted
+        - EscrowCreated
+        - EscrowDenied
+        - EscrowRefunded
+        - EscrowReleased
+        - EscrowSubmitted
+        - Initialized
+        - OwnershipTransferred
+        - ProofSubmitted
+        - Upgraded
+      abis:
+        - name: EscrowPayment
+          file: ./abis/EscrowPayment.json
+      eventHandlers:
+        - event: AI_DisputeClaimed(uint256,uint8)
+          handler: handleAI_DisputeClaimed
+        - event: DipsuteAICreated(uint256,address)
+          handler: handleDipsuteAICreated
+        - event: DisputeOracleCreated(uint256,address)
+          handler: handleDisputeOracleCreated
+        - event: DisputeResolvedByAI(uint256,address,uint256)
+          handler: handleDisputeResolvedByAI
+        - event: DisputeResolvedByOracle(uint256,address,address,uint256)
+          handler: handleDisputeResolvedByOracle
+        - event: EscrowAccepted(uint256,uint8)
+          handler: handleEscrowAccepted
+        - event: EscrowCreated((uint256,string,string,address,address,address,uint256,uint256,uint256,uint256,uint8,uint8),uint256)
+          handler: handleEscrowCreated
+        - event: EscrowDenied(uint256,uint8)
+          handler: handleEscrowDenied
+        - event: EscrowRefunded(uint256,uint8)
+          handler: handleEscrowRefunded
+        - event: EscrowReleased(uint256,uint8,uint256,uint256)
+          handler: handleEscrowReleased
+        - event: EscrowSubmitted(uint256,uint8)
+          handler: handleEscrowSubmitted
+        - event: Initialized(uint64)
+          handler: handleInitialized
+        - event: OwnershipTransferred(indexed address,indexed address)
+          handler: handleOwnershipTransferred
+        - event: ProofSubmitted(uint256,address,address,string)
+          handler: handleProofSubmitted
+        - event: Upgraded(indexed address)
+          handler: handleUpgraded
+      file: ./src/escrow-payment.ts

@@ -1,7 +1,7 @@
 {
   "sepolia": {
     "EscrowPayment": {
-      "address": "0xE2C2093d15d13D1897B60EE95f439d3c0e9E7bd5",
+      "address": "0x0c34777eC2622f6190e1b4b5DdD72e7B654Fe5EC",
       "startBlock": 9303793
     }
   }
