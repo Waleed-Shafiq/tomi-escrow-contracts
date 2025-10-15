@@ -32,6 +32,7 @@ import {
   ProofSubmitted,
   Upgraded
 } from "../generated/schema"
+import { Bytes } from "@graphprotocol/graph-ts"
 
 export function handleAI_DisputeClaimed(event: AI_DisputeClaimedEvent): void {
   let entity = new AI_DisputeClaimed(
@@ -43,8 +44,12 @@ export function handleAI_DisputeClaimed(event: AI_DisputeClaimedEvent): void {
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
   entity.transactionHash = event.transaction.hash
-
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowId.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus // AI dispute
+    escrowCreated.save()
+  }
 }
 
 export function handleDipsuteAICreated(event: DipsuteAICreatedEvent): void {
@@ -59,6 +64,11 @@ export function handleDipsuteAICreated(event: DipsuteAICreatedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowID.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = 6 // AI dispute
+    escrowCreated.save()
+  }
 }
 
 export function handleDisputeOracleCreated(
@@ -75,6 +85,11 @@ export function handleDisputeOracleCreated(
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowID.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = 8 // Oracle dispute
+    escrowCreated.save()
+  }
 }
 
 export function handleDisputeResolvedByAI(
@@ -92,6 +107,12 @@ export function handleDisputeResolvedByAI(
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowID.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = 7 // AI dispute resolved
+    escrowCreated.save()
+  }
+
 }
 
 export function handleDisputeResolvedByOracle(
@@ -108,7 +129,6 @@ export function handleDisputeResolvedByOracle(
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
   entity.transactionHash = event.transaction.hash
-
   entity.save()
 }
 
@@ -122,14 +142,20 @@ export function handleEscrowAccepted(event: EscrowAcceptedEvent): void {
   entity.blockNumber = event.block.number
   entity.blockTimestamp = event.block.timestamp
   entity.transactionHash = event.transaction.hash
-
   entity.save()
+
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowId.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus
+    escrowCreated.save()
+  }
 }
 
+
 export function handleEscrowCreated(event: EscrowCreatedEvent): void {
-  let entity = new EscrowCreated(
-    event.transaction.hash.concatI32(event.logIndex.toI32())
-  )
+  // Use escrow ID as the entity ID (converted to string and then to Bytes)
+  const escrowId = event.params.escrowdetails.escrowID.toString()
+  let entity = new EscrowCreated(Bytes.fromUTF8(escrowId))
   entity.escrowdetails_escrowID = event.params.escrowdetails.escrowID
   entity.escrowdetails_escrowDetialsURI =
     event.params.escrowdetails.escrowDetialsURI
@@ -165,6 +191,11 @@ export function handleEscrowDenied(event: EscrowDeniedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(event.address)
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus
+    escrowCreated.save()
+  }
 }
 
 export function handleEscrowRefunded(event: EscrowRefundedEvent): void {
@@ -179,6 +210,11 @@ export function handleEscrowRefunded(event: EscrowRefundedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowId.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus
+    escrowCreated.save()
+  }
 }
 
 export function handleEscrowReleased(event: EscrowReleasedEvent): void {
@@ -195,6 +231,11 @@ export function handleEscrowReleased(event: EscrowReleasedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowId.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus
+    escrowCreated.save()
+  }
 }
 
 export function handleEscrowSubmitted(event: EscrowSubmittedEvent): void {
@@ -209,6 +250,11 @@ export function handleEscrowSubmitted(event: EscrowSubmittedEvent): void {
   entity.transactionHash = event.transaction.hash
 
   entity.save()
+  let escrowCreated = EscrowCreated.load(Bytes.fromUTF8(event.params.escrowId.toString()))
+  if (escrowCreated != null) {
+    escrowCreated.escrowdetails_status = event.params.escrowIdStatus
+    escrowCreated.save()
+  }
 }
 
 export function handleInitialized(event: InitializedEvent): void {
