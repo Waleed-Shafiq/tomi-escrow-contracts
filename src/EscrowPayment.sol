@@ -27,9 +27,9 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public totalEscrowFeeCollected;
 
     uint256 public constant PPM = 1_000_000; //100 %
-    uint256 public constant escrowPlatformFee = 10_000; //1%
-    uint256 public constant regularDisputeDealSizeFee = 2_500; //0.25%
-    uint256 public constant miniDisputeDealSizeFee = 5_000; //0.5%
+    uint256 public constant ESCROW_PLATFORM_FEE = 10_000; //1%
+    uint256 public constant REGULAR_DISPUTE_DEAL_SIZE_FEE = 2_500; //0.25%
+    uint256 public constant MINI_DISPUTE_DEAL_SIZE_FEE = 5_000; //0.5%
     uint256 public constant DENIED_REFUND_TIME = 72 hours; // 72 Hours
     uint256 public constant APPEAL_TIME_DISPUTE_AI = 30 minutes; // 30 Mints
 
@@ -290,25 +290,25 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         totalEscrowFeeCollected =
             totalEscrowFeeCollected +
-            (amountInUSDT * escrowPlatformFee) /
+            (amountInUSDT * ESCROW_PLATFORM_FEE) /
             PPM;
 
         //transfer fee of the escrow + the amount in usdtToken to this address
         IERC20(tokenAddress).safeTransferFrom(
             msg.sender,
             address(this),
-            (amountInUSDT + (amountInUSDT * escrowPlatformFee) / PPM)
+            (amountInUSDT + (amountInUSDT * ESCROW_PLATFORM_FEE) / PPM)
         );
 
         //transfer fee to the escrow fee wallet
         IERC20(tokenAddress).safeTransfer(
             feeWallet,
-            (amountInUSDT * escrowPlatformFee) / PPM
+            (amountInUSDT * ESCROW_PLATFORM_FEE) / PPM
         );
 
         emit EscrowCreated({
             escrowdetails: activeEscrow,
-            escrowFee: (amountInUSDT * escrowPlatformFee) / PPM
+            escrowFee: (amountInUSDT * ESCROW_PLATFORM_FEE) / PPM
         });
 
         return escrowId;
@@ -745,18 +745,18 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         if (activeEscrow.disputeType == DisputeType.MiniDispute) {
             oracleFee =
                 amountinUSD +
-                (activeEscrow.tokenAmount * miniDisputeDealSizeFee) /
+                (activeEscrow.tokenAmount * MINI_DISPUTE_DEAL_SIZE_FEE) /
                 PPM; //0.5%  of dealsize
             loyaltyFee =
-                (activeEscrow.tokenAmount * miniDisputeDealSizeFee) /
+                (activeEscrow.tokenAmount * MINI_DISPUTE_DEAL_SIZE_FEE) /
                 PPM;
         } else if (activeEscrow.disputeType == DisputeType.RegularDispute) {
             oracleFee =
                 amountinUSD +
-                (activeEscrow.tokenAmount * regularDisputeDealSizeFee) /
+                (activeEscrow.tokenAmount * REGULAR_DISPUTE_DEAL_SIZE_FEE) /
                 PPM; // 0.25%  of the dealsize
             loyaltyFee =
-                (activeEscrow.tokenAmount * regularDisputeDealSizeFee) /
+                (activeEscrow.tokenAmount * REGULAR_DISPUTE_DEAL_SIZE_FEE) /
                 PPM;
         }
 
@@ -1020,6 +1020,22 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         }
 
         resolverAI = _updatedResolverAddress;
+
+        //TODO:  add  event  here
+    }
+
+    function updateSignerAddress(
+        address _updateSignerAddress
+    ) external onlyOwner {
+        if (_updateSignerAddress == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (_updateSignerAddress == signer) {
+            revert SameAsLastOne();
+        }
+
+        signer = _updateSignerAddress;
 
         //TODO:  add  event  here
     }
