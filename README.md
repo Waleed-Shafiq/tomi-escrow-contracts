@@ -93,13 +93,13 @@ Owner-only setters (`updateFeeWallet`, `updateSwapAndBurnContract`, `updateTomiD
 
 ### Deployment Command : 
 forge script script/EscrowPayment.s.sol \
-  --rpc-url "$RPC_URL_ETH" \
+  --rpc-url "$RPC_URL" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
 
-Deployment Chain : Sepolia
+Deployment Chain : Arbitrum Sepolia
 Deployment Address : 
-EscrowPayment implementation deployed at: 0x0c34777eC2622f6190e1b4b5DdD72e7B654Fe5EC
-EscrowPayment proxy deployed at: 0x47165D0aA5a61CDD9094Bb3afd3D2f8101CcF110
+EscrowPayment implementation deployed at: 0x80980e8803041B7D1d7930B358706B4C546CbdA3
+EscrowPayment proxy deployed at: 0xC3d5027f9Fcc36A8a876a008D0111FFF7FA5051a
 
 

@@ -19,6 +19,7 @@ contract EscrowPaymentTest is Test {
     address internal swapAndBurn;
     address internal resolverAI;
     address internal signer;
+    address internal owner;
     uint256 internal signerPk;
 
     uint256 internal constant PPM = 1_000_000;
@@ -33,6 +34,7 @@ contract EscrowPaymentTest is Test {
     function setUp() public {
         alice = makeAddr("alice");
         bob = makeAddr("bob");
+        owner = makeAddr("owner");
         feeWallet = makeAddr("feeWallet");
         swapAndBurn = makeAddr("swapAndBurn");
         resolverAI = makeAddr("resolverAI");
@@ -45,8 +47,8 @@ contract EscrowPaymentTest is Test {
         escrow = new EscrowPayment();
         bytes memory escrowParams = abi.encodeWithSelector(
             EscrowPayment.Initialize.selector,
+            owner,
             feeWallet,
-            swapAndBurn,
             address(tomiDispute),
             address(usdt),
             resolverAI,
@@ -95,7 +97,6 @@ contract EscrowPaymentTest is Test {
 
     function _createEscrowWithType(
         uint256 amount,
-        uint256 feePpm,
         uint256 deadline,
         EscrowPayment.DisputeType disputeType
     ) internal returns (uint256 id) {
@@ -109,7 +110,6 @@ contract EscrowPaymentTest is Test {
             bob,
             address(usdt),
             amount,
-            feePpm,
             deadline,
             disputeType
         );
@@ -118,12 +118,10 @@ contract EscrowPaymentTest is Test {
 
     function _createEscrow(
         uint256 amount,
-        uint256 feePpm,
         uint256 deadline
     ) internal returns (uint256 id) {
         id = _createEscrowWithType(
             amount,
-            feePpm,
             deadline,
             EscrowPayment.DisputeType.RegularDispute
         );
@@ -141,10 +139,9 @@ contract EscrowPaymentTest is Test {
 
     function _prepareAIDispute(
         uint256 amount,
-        uint256 feePpm,
         string memory submissionUri
     ) internal returns (uint256 id) {
-        id = _createEscrow(amount, feePpm, block.timestamp + 5 days);
+        id = _createEscrow(amount, block.timestamp + 5 days);
         _accept(id);
         _submit(id, submissionUri);
 
@@ -152,7 +149,7 @@ contract EscrowPaymentTest is Test {
         vm.prank(bob);
         usdt.approve(address(escrow), RESOLVER_FEE);
         vm.prank(bob);
-        escrow.createAIDispute(id, RESOLVER_FEE);
+        escrow.CreateAIDispute(id, RESOLVER_FEE);
     }
 
     function _getEscrowStatus(
@@ -160,7 +157,7 @@ contract EscrowPaymentTest is Test {
     ) internal view returns (EscrowPayment.EscrowStatus) {
         EscrowPayment.EscrowStatus status;
         EscrowPayment.DisputeType disputeType;
-        (, , , , , , , , , , status, disputeType) = escrow.escrows(id);
+        (, , , , , , , , , status, disputeType) = escrow.escrows(id);
         disputeType;
         return status;
     }
@@ -194,13 +191,11 @@ contract EscrowPaymentTest is Test {
         EscrowPayment.DisputeType disputeType,
         address initiator,
         uint256 amount,
-        uint256 feePpm,
         uint256 amountInUSD,
         string memory submissionUri
     ) internal returns (uint256 id, uint256 oracleFee, uint256 loyaltyFee) {
         id = _createEscrowWithType(
             amount,
-            feePpm,
             block.timestamp + 5 days,
             disputeType
         );
@@ -231,7 +226,6 @@ contract EscrowPaymentTest is Test {
             bob,
             address(usdt),
             1_000_000,
-            DEFAULT_FEE_PPM,
             nowTs,
             EscrowPayment.DisputeType.RegularDispute
         );
@@ -244,7 +238,6 @@ contract EscrowPaymentTest is Test {
             bob,
             address(usdt),
             1_000_000,
-            DEFAULT_FEE_PPM,
             nowTs - 1,
             EscrowPayment.DisputeType.RegularDispute
         );
@@ -259,7 +252,6 @@ contract EscrowPaymentTest is Test {
             bob,
             address(0xBEEF),
             1_000_000,
-            DEFAULT_FEE_PPM,
             deadline,
             EscrowPayment.DisputeType.RegularDispute
         );
@@ -273,7 +265,6 @@ contract EscrowPaymentTest is Test {
             "ipfs://d",
             bob,
             address(usdt),
-            0,
             0,
             deadline,
             EscrowPayment.DisputeType.RegularDispute
@@ -295,7 +286,6 @@ contract EscrowPaymentTest is Test {
             bob,
             address(usdt),
             amount,
-            DEFAULT_FEE_PPM,
             deadline,
             EscrowPayment.DisputeType.MiniDispute
         );
@@ -306,7 +296,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_AcceptEscrow_OnlyToAddressAndNotExpired() public {
-        uint256 id = _createEscrow(1_000_000, 10_000, block.timestamp + 1 days);
+        uint256 id = _createEscrow(1_000_000, block.timestamp + 1 days);
 
         // wrong caller
         vm.prank(alice);
@@ -322,11 +312,7 @@ contract EscrowPaymentTest is Test {
         escrow.AcceptEscrow(id);
 
         // new escrow expired cannot accept
-        uint256 id2 = _createEscrow(
-            1_000_000,
-            10_000,
-            block.timestamp + 1 days
-        );
+        uint256 id2 = _createEscrow(1_000_000, block.timestamp + 1 days);
         vm.warp(block.timestamp + 2 days);
         vm.prank(bob);
         vm.expectRevert(EscrowPayment.EscrowExpired.selector);
@@ -337,7 +323,7 @@ contract EscrowPaymentTest is Test {
         uint256 nowTs = block.timestamp;
         uint256 deadline = nowTs + 7 days;
         uint256 amount = 1_000_000; // 1 USDT (6 decimals)
-        uint256 id1 = _createEscrow(amount, 50_000, deadline); // 5%
+        uint256 id1 = _createEscrow(amount, deadline); // 5%
 
         // Created -> submit should revert
         vm.prank(bob);
@@ -357,7 +343,7 @@ contract EscrowPaymentTest is Test {
     function test_Submit_BlocksPastDeadline() public {
         uint256 nowTs = block.timestamp;
         uint256 deadline = nowTs + 3 days;
-        uint256 id = _createEscrow(2_000_000, DEFAULT_FEE_PPM, deadline);
+        uint256 id = _createEscrow(2_000_000, deadline);
         _accept(id);
 
         vm.warp(deadline + 1);
@@ -367,11 +353,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Submit_OnlyToAddressCanSubmit() public {
-        uint256 id = _createEscrow(
-            2_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 5 days
-        );
+        uint256 id = _createEscrow(2_000_000, block.timestamp + 5 days);
         _accept(id);
 
         address eve = makeAddr("eve");
@@ -383,7 +365,7 @@ contract EscrowPaymentTest is Test {
     function test_Submit_AtDeadline_Allows() public {
         uint256 nowTs = block.timestamp;
         uint256 deadline = nowTs + 2 days;
-        uint256 id = _createEscrow(2_000_000, DEFAULT_FEE_PPM, deadline);
+        uint256 id = _createEscrow(2_000_000, deadline);
         _accept(id);
 
         // jump exactly to deadline
@@ -394,11 +376,7 @@ contract EscrowPaymentTest is Test {
 
     function test_Submit_RevertsAfterReleaseOrRefund() public {
         // Release path
-        uint256 id1 = _createEscrow(
-            1_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 3 days
-        );
+        uint256 id1 = _createEscrow(1_000_000, block.timestamp + 3 days);
         _accept(id1);
         vm.prank(bob);
         escrow.SubmitEscrow(id1, "ipfs://work");
@@ -410,11 +388,7 @@ contract EscrowPaymentTest is Test {
         escrow.SubmitEscrow(id1, "ipfs://after-release");
 
         // Refund path
-        uint256 id2 = _createEscrow(
-            1_500_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 10 days
-        );
+        uint256 id2 = _createEscrow(1_500_000, block.timestamp + 10 days);
         vm.prank(alice);
         escrow.RefundEscrow(id2);
 
@@ -424,11 +398,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Submit_OnlyToAddressCanResubmitWhenSubmitted() public {
-        uint256 id = _createEscrow(
-            2_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 5 days
-        );
+        uint256 id = _createEscrow(2_000_000, block.timestamp + 5 days);
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://first");
@@ -442,7 +412,7 @@ contract EscrowPaymentTest is Test {
     function test_Refund_Created_Instant() public {
         uint256 amount = 5_000_000; // 5 USDT
         uint256 deadline = block.timestamp + 10 days;
-        uint256 id = _createEscrow(amount, DEFAULT_FEE_PPM, deadline);
+        uint256 id = _createEscrow(amount, deadline);
 
         uint256 platformFee = (amount * PLATFORM_FEE_PPM) / PPM;
         // balances after creation
@@ -458,11 +428,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Refund_Accepted_BeforeDeadline_Reverts() public {
-        uint256 id = _createEscrow(
-            3_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 4 days
-        );
+        uint256 id = _createEscrow(3_000_000, block.timestamp + 4 days);
         _accept(id);
 
         vm.prank(alice);
@@ -473,7 +439,7 @@ contract EscrowPaymentTest is Test {
     function test_Refund_Accepted_AfterDeadline_Allows() public {
         uint256 amount = 3_500_000;
         uint256 deadline = block.timestamp + 2 days;
-        uint256 id = _createEscrow(amount, DEFAULT_FEE_PPM, deadline);
+        uint256 id = _createEscrow(amount, deadline);
         _accept(id);
 
         vm.warp(deadline + 1);
@@ -485,11 +451,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Refund_Submitted_Reverts() public {
-        uint256 id = _createEscrow(
-            2_500_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 5 days
-        );
+        uint256 id = _createEscrow(2_500_000, block.timestamp + 5 days);
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://done");
@@ -500,11 +462,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Refund_OnlyFromAddressCanRefund() public {
-        uint256 id = _createEscrow(
-            2_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 5 days
-        );
+        uint256 id = _createEscrow(2_000_000, block.timestamp + 5 days);
         // bob tries to refund
         vm.prank(bob);
         vm.expectRevert(EscrowPayment.YouAreNotAuthorized.selector);
@@ -514,7 +472,7 @@ contract EscrowPaymentTest is Test {
     function test_Refund_Accepted_AtDeadline_Allows() public {
         uint256 deadline = block.timestamp + 2 days;
         uint256 amount = 3_000_000;
-        uint256 id = _createEscrow(amount, DEFAULT_FEE_PPM, deadline);
+        uint256 id = _createEscrow(amount, deadline);
         _accept(id);
 
         // at exact deadline it should allow refund
@@ -525,11 +483,7 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_Refund_AfterReleased_Reverts() public {
-        uint256 id = _createEscrow(
-            1_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 3 days
-        );
+        uint256 id = _createEscrow(1_000_000, block.timestamp + 3 days);
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://work");
@@ -544,16 +498,14 @@ contract EscrowPaymentTest is Test {
     function test_Release_OnlyFromAddressAndSubmittedAndPayouts() public {
         uint256 amount = 20_000_000; // 20 USDT
         uint256 deadline = block.timestamp + 3 days;
-        uint256 feePpm = 50_000; // 5%
-        uint256 id = _createEscrow(amount, feePpm, deadline);
+        uint256 id = _createEscrow(amount, deadline);
 
         // accept and submit by bob
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://work");
 
-        uint256 burnFee = (amount * feePpm) / PPM; // 5%
-        uint256 toBob = amount - burnFee;
+        uint256 toBob = amount;
 
         // wrong caller cannot release
         vm.prank(bob);
@@ -563,14 +515,12 @@ contract EscrowPaymentTest is Test {
         // release by alice
         vm.prank(alice);
         escrow.ReleaseEscrow(id);
-
-        assertEq(usdt.balanceOf(swapAndBurn), burnFee);
         assertEq(usdt.balanceOf(bob), toBob);
         assertEq(usdt.balanceOf(address(escrow)), 0);
     }
 
     function test_Release_RevertsIfNotSubmitted() public {
-        uint256 id = _createEscrow(1_000_000, 10_000, block.timestamp + 5 days);
+        uint256 id = _createEscrow(1_000_000, block.timestamp + 5 days);
         // not submitted yet
         vm.prank(alice);
         vm.expectRevert(EscrowPayment.OnlySubmittedOneAreAllowed.selector);
@@ -579,8 +529,7 @@ contract EscrowPaymentTest is Test {
 
     function test_Release_SplitsWhenNonZeroFee() public {
         uint256 amount = 4_200_000; // 4.2 USDT
-        uint256 feePpm = 12_345; // 1.2345%
-        uint256 id = _createEscrow(amount, feePpm, block.timestamp + 5 days);
+        uint256 id = _createEscrow(amount, block.timestamp + 5 days);
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://work");
@@ -588,19 +537,14 @@ contract EscrowPaymentTest is Test {
         vm.prank(alice);
         escrow.ReleaseEscrow(id);
 
-        uint256 burnFee = (amount * feePpm) / PPM;
-        uint256 toBob = amount - burnFee;
-        assertEq(usdt.balanceOf(swapAndBurn), burnFee);
+        uint256 toBob = amount;
+
         assertEq(usdt.balanceOf(bob), toBob);
         assertEq(usdt.balanceOf(address(escrow)), 0);
     }
 
     function test_Release_RevertsSecondTime() public {
-        uint256 id = _createEscrow(
-            1_000_000,
-            100_000,
-            block.timestamp + 5 days
-        ); // 10%
+        uint256 id = _createEscrow(1_000_000, block.timestamp + 5 days); // 10%
         _accept(id);
         vm.prank(bob);
         escrow.SubmitEscrow(id, "ipfs://work");
@@ -617,11 +561,7 @@ contract EscrowPaymentTest is Test {
     function test_AIDispute_CreateOnlyResponderAndAllowedWhenSubmittedOrDenied()
         public
     {
-        uint256 id = _createEscrow(
-            2_000_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 5 days
-        );
+        uint256 id = _createEscrow(2_000_000, block.timestamp + 5 days);
         _accept(id);
         _submit(id, "ipfs://art");
 
@@ -633,19 +573,15 @@ contract EscrowPaymentTest is Test {
         // creator cannot create AI dispute
         vm.prank(alice);
         vm.expectRevert(EscrowPayment.YouAreNotAuthorized.selector);
-        escrow.createAIDispute(id, RESOLVER_FEE);
+        escrow.CreateAIDispute(id, RESOLVER_FEE);
 
         // responder can create when Submitted
         vm.prank(bob);
-        escrow.createAIDispute(id, RESOLVER_FEE);
+        escrow.CreateAIDispute(id, RESOLVER_FEE);
 
         // set back to Submitted (simulate restart) and Deny then allow AI dispute
         // For a fresh escrow
-        uint256 id2 = _createEscrow(
-            2_500_000,
-            DEFAULT_FEE_PPM,
-            block.timestamp + 6 days
-        );
+        uint256 id2 = _createEscrow(2_500_000, block.timestamp + 6 days);
         _accept(id2);
         _submit(id2, "ipfs://b");
         vm.prank(alice);
@@ -654,15 +590,11 @@ contract EscrowPaymentTest is Test {
         vm.prank(bob);
         usdt.approve(address(escrow), RESOLVER_FEE);
         vm.prank(bob);
-        escrow.createAIDispute(id2, RESOLVER_FEE);
+        escrow.CreateAIDispute(id2, RESOLVER_FEE);
     }
 
     function test_AIDispute_ResolveViaAIRequiresValidSignature() public {
-        uint256 id = _prepareAIDispute(
-            4_000_000,
-            DEFAULT_FEE_PPM,
-            "ipfs://submission"
-        );
+        uint256 id = _prepareAIDispute(4_000_000, "ipfs://submission");
 
         uint256 deadline = block.timestamp + 1 hours;
 
@@ -675,12 +607,12 @@ contract EscrowPaymentTest is Test {
 
         vm.prank(resolverAI);
         vm.expectRevert(EscrowPayment.InvalidSignature.selector);
-        escrow.resolveViaAI(id, bob, deadline, invalidSig);
+        escrow.ResolveViaAI(id, bob, deadline, invalidSig);
 
         bytes memory validSig = _signAIResolution(id, bob, deadline);
 
         vm.prank(resolverAI);
-        escrow.resolveViaAI(id, bob, deadline, validSig);
+        escrow.ResolveViaAI(id, bob, deadline, validSig);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
         assertEq(
@@ -695,45 +627,37 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_AIDispute_ClaimBeforeAppealWindowReverts() public {
-        uint256 id = _prepareAIDispute(
-            5_000_000,
-            DEFAULT_FEE_PPM,
-            "ipfs://sub"
-        );
+        uint256 id = _prepareAIDispute(5_000_000, "ipfs://sub");
 
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signAIResolution(id, bob, deadline);
 
         vm.prank(resolverAI);
-        escrow.resolveViaAI(id, bob, deadline, sig);
+        escrow.ResolveViaAI(id, bob, deadline, sig);
 
         vm.prank(bob);
         vm.expectRevert(EscrowPayment.AppealTimeNotPassedYet.selector);
-        escrow.claimAIDispute(id);
+        escrow.ClaimAIDispute(id);
     }
 
     function test_AIDispute_ClaimAfterAppealWindowPaysResponder() public {
         uint256 amount = 9_000_000;
-        uint256 feePpm = 40_000;
-        uint256 id = _prepareAIDispute(amount, feePpm, "ipfs://job");
+        uint256 id = _prepareAIDispute(amount, "ipfs://job");
 
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signAIResolution(id, bob, deadline);
 
         vm.prank(resolverAI);
-        escrow.resolveViaAI(id, bob, deadline, sig);
+        escrow.ResolveViaAI(id, bob, deadline, sig);
 
         EscrowPayment.EscrowAIDisputeInfo memory info = _getAIInfo(id);
 
         vm.warp(info.resolveTime + escrow.APPEAL_TIME_DISPUTE_AI() + 1);
 
-        uint256 fee = (amount * feePpm) / PPM;
-
         vm.prank(bob);
-        escrow.claimAIDispute(id);
+        escrow.ClaimAIDispute(id);
 
-        assertEq(usdt.balanceOf(swapAndBurn), fee);
-        assertEq(usdt.balanceOf(bob), amount - fee);
+        assertEq(usdt.balanceOf(bob), amount);
         assertEq(usdt.balanceOf(address(escrow)), 0);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
@@ -744,17 +668,13 @@ contract EscrowPaymentTest is Test {
         public
     {
         uint256 amount = 7_500_000;
-        uint256 id = _prepareAIDispute(
-            amount,
-            DEFAULT_FEE_PPM,
-            "ipfs://design"
-        );
+        uint256 id = _prepareAIDispute(amount, "ipfs://design");
 
         uint256 deadline = block.timestamp + 1 hours;
         bytes memory sig = _signAIResolution(id, alice, deadline);
 
         vm.prank(resolverAI);
-        escrow.resolveViaAI(id, alice, deadline, sig);
+        escrow.ResolveViaAI(id, alice, deadline, sig);
 
         EscrowPayment.EscrowAIDisputeInfo memory info = _getAIInfo(id);
 
@@ -763,10 +683,9 @@ contract EscrowPaymentTest is Test {
         uint256 aliceBalanceBefore = usdt.balanceOf(alice);
 
         vm.prank(alice);
-        escrow.claimAIDispute(id);
+        escrow.ClaimAIDispute(id);
 
         assertEq(usdt.balanceOf(alice), aliceBalanceBefore + amount);
-        assertEq(usdt.balanceOf(swapAndBurn), 0);
         assertEq(usdt.balanceOf(address(escrow)), 0);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
@@ -778,6 +697,9 @@ contract EscrowPaymentTest is Test {
         uint256 amount = 8_000_000;
         uint256 amountInUSD = MIN_MINI_DISPUTE_AMOUNT + 5 * 1e6;
 
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
+
         (
             uint256 id,
             uint256 oracleFee,
@@ -786,7 +708,6 @@ contract EscrowPaymentTest is Test {
                 EscrowPayment.DisputeType.MiniDispute,
                 bob,
                 amount,
-                DEFAULT_FEE_PPM,
                 amountInUSD,
                 "ipfs://mini"
             );
@@ -822,22 +743,24 @@ contract EscrowPaymentTest is Test {
     function test_OracleDispute_SubmitProofAgainRecordsProofAndBlocksAfterWinner()
         public
     {
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
+
         (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             bob,
             9_000_000,
-            DEFAULT_FEE_PPM,
             MIN_REGULAR_DISPUTE_AMOUNT,
             "ipfs://regular"
         );
 
         vm.prank(alice);
-        escrow.submitProofAgain(id, "ipfs://proof1");
+        escrow.SubmitProofAgain(id, "ipfs://proof1");
         assertEq(tomiDispute.lastProofSubmitter(), alice);
         assertEq(tomiDispute.lastProofURI(), "ipfs://proof1");
 
         vm.prank(bob);
-        escrow.submitProofAgain(id, "ipfs://proof2");
+        escrow.SubmitProofAgain(id, "ipfs://proof2");
         assertEq(tomiDispute.lastProofSubmitter(), bob);
         assertEq(tomiDispute.lastProofURI(), "ipfs://proof2");
 
@@ -845,18 +768,20 @@ contract EscrowPaymentTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(EscrowPayment.WinnnerRevealed.selector);
-        escrow.submitProofAgain(id, "ipfs://proof3");
+        escrow.SubmitProofAgain(id, "ipfs://proof3");
     }
 
     function test_OracleDispute_ResolveViaOracleRequiresValidSignature()
         public
     {
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
+
         uint256 amount = 10_000_000;
         (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             bob,
             amount,
-            DEFAULT_FEE_PPM,
             MIN_REGULAR_DISPUTE_AMOUNT + 50 * 1e6,
             "ipfs://regular-resolve"
         );
@@ -877,16 +802,14 @@ contract EscrowPaymentTest is Test {
 
             vm.prank(alice);
             vm.expectRevert(EscrowPayment.InvalidSignature.selector);
-            escrow.resolveDisputeOracle(id, deadline, badSig);
+            escrow.ResolveDisputeOracle(id, deadline, badSig);
         }
 
         bytes memory sig = _signOracleResolution(id, alice, deadline);
 
         uint256 bobBalanceBefore = usdt.balanceOf(bob);
-        uint256 swapBalanceBefore = usdt.balanceOf(swapAndBurn);
-
         vm.prank(alice);
-        escrow.resolveDisputeOracle(id, deadline, sig);
+        escrow.ResolveDisputeOracle(id, deadline, sig);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
         assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Released));
@@ -903,25 +826,23 @@ contract EscrowPaymentTest is Test {
             uint256(disputeStatus),
             uint256(EscrowPayment.DisputeStatus.Resolved)
         );
-
-        uint256 feeAmount = (amount * DEFAULT_FEE_PPM) / PPM;
-        assertEq(usdt.balanceOf(swapAndBurn), swapBalanceBefore + feeAmount);
-        assertEq(usdt.balanceOf(bob), bobBalanceBefore + amount - feeAmount);
-
+        assertEq(usdt.balanceOf(bob), bobBalanceBefore + amount);
         vm.prank(alice);
         vm.expectRevert(EscrowPayment.SignatureUsed.selector);
-        escrow.resolveDisputeOracle(id, deadline, sig);
+        escrow.ResolveDisputeOracle(id, deadline, sig);
     }
 
     function test_OracleDispute_ResolveViaOracleRefundsCreatorWhenWinner()
         public
     {
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
+
         uint256 amount = 6_000_000;
         (uint256 id, , ) = _openOracleDispute(
             EscrowPayment.DisputeType.RegularDispute,
             alice,
             amount,
-            DEFAULT_FEE_PPM,
             MIN_REGULAR_DISPUTE_AMOUNT + 10 * 1e6,
             "ipfs://creator"
         );
@@ -934,7 +855,7 @@ contract EscrowPaymentTest is Test {
         uint256 aliceBalanceBefore = usdt.balanceOf(alice);
 
         vm.prank(alice);
-        escrow.resolveDisputeOracle(id, deadline, sig);
+        escrow.ResolveDisputeOracle(id, deadline, sig);
 
         EscrowPayment.EscrowStatus status = _getEscrowStatus(id);
         assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Refunded));
@@ -961,12 +882,14 @@ contract EscrowPaymentTest is Test {
         uint256 deadline = block.timestamp + 4 days;
         uint256 id = _createEscrowWithType(
             amount,
-            DEFAULT_FEE_PPM,
             deadline,
             EscrowPayment.DisputeType.RegularDispute
         );
         _accept(id);
         _submit(id, "ipfs://allowance");
+
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
 
         vm.prank(bob);
         vm.expectRevert(EscrowPayment.InsufficientAllowance.selector);
