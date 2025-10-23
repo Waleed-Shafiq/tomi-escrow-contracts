@@ -8,7 +8,7 @@ dataSources:
     name: EscrowPayment
     network: arbitrum-sepolia
     source:
-      address: "0x80980e8803041B7D1d7930B358706B4C546CbdA3"
+      address: "0xC3d5027f9Fcc36A8a876a008D0111FFF7FA5051a"
       abi: EscrowPayment
       startBlock: 207608157
     mapping:
