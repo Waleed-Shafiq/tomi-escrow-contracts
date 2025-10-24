@@ -55,7 +55,7 @@ type EscrowAccepted @entity(immutable: true) {
   transactionHash: Bytes!
 }
 
-type EscrowCreated @entity(immutable: true) {
+type EscrowCreated @entity(immutable: false) {
   id: Bytes!
   escrowdetails_escrowID: BigInt! # uint256
   escrowdetails_escrowDetialsURI: String! # string
@@ -200,3 +200,5 @@ type Upgraded @entity(immutable: true) {
   blockTimestamp: BigInt!
   transactionHash: Bytes!
 }
+
+

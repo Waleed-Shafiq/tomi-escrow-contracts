@@ -1,8 +1,0 @@
-{
-  "arbitrum-sepolia": {
-    "EscrowPayment": {
-      "address": "0xC3d5027f9Fcc36A8a876a008D0111FFF7FA5051a",
-      "startBlock": 207608157
-    }
-  }
-}
