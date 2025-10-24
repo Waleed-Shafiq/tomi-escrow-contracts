@@ -12,9 +12,15 @@ import {
   EscrowRefunded,
   EscrowReleased,
   EscrowSubmitted,
+  FeeWalletUpdated,
   Initialized,
+  OracleDisputeStatusUpdated,
   OwnershipTransferred,
   ProofSubmitted,
+  ResolverAddressUpdated,
+  ResolverFeeUpdated,
+  SignerAddressUpdated,
+  TomiDisputeAddressUpdated,
   Upgraded
 } from "../generated/EscrowPayment/EscrowPayment"
 
@@ -262,8 +268,7 @@ export function createEscrowRefundedEvent(
 export function createEscrowReleasedEvent(
   escrowId: BigInt,
   escrowIdStatus: i32,
-  amountReleased: BigInt,
-  feeForSwapandBurn: BigInt
+  amountReleased: BigInt
 ): EscrowReleased {
   let escrowReleasedEvent = changetype<EscrowReleased>(newMockEvent())
 
@@ -285,12 +290,6 @@ export function createEscrowReleasedEvent(
     new ethereum.EventParam(
       "amountReleased",
       ethereum.Value.fromUnsignedBigInt(amountReleased)
-    )
-  )
-  escrowReleasedEvent.parameters.push(
-    new ethereum.EventParam(
-      "feeForSwapandBurn",
-      ethereum.Value.fromUnsignedBigInt(feeForSwapandBurn)
     )
   )
 
@@ -321,6 +320,30 @@ export function createEscrowSubmittedEvent(
   return escrowSubmittedEvent
 }
 
+export function createFeeWalletUpdatedEvent(
+  oldFeeWallet: Address,
+  newFeeWallet: Address
+): FeeWalletUpdated {
+  let feeWalletUpdatedEvent = changetype<FeeWalletUpdated>(newMockEvent())
+
+  feeWalletUpdatedEvent.parameters = new Array()
+
+  feeWalletUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "oldFeeWallet",
+      ethereum.Value.fromAddress(oldFeeWallet)
+    )
+  )
+  feeWalletUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "newFeeWallet",
+      ethereum.Value.fromAddress(newFeeWallet)
+    )
+  )
+
+  return feeWalletUpdatedEvent
+}
+
 export function createInitializedEvent(version: BigInt): Initialized {
   let initializedEvent = changetype<Initialized>(newMockEvent())
 
@@ -334,6 +357,32 @@ export function createInitializedEvent(version: BigInt): Initialized {
   )
 
   return initializedEvent
+}
+
+export function createOracleDisputeStatusUpdatedEvent(
+  oldDisputeStatus: boolean,
+  newDisputeStatus: boolean
+): OracleDisputeStatusUpdated {
+  let oracleDisputeStatusUpdatedEvent = changetype<OracleDisputeStatusUpdated>(
+    newMockEvent()
+  )
+
+  oracleDisputeStatusUpdatedEvent.parameters = new Array()
+
+  oracleDisputeStatusUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "oldDisputeStatus",
+      ethereum.Value.fromBoolean(oldDisputeStatus)
+    )
+  )
+  oracleDisputeStatusUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "newDisputeStatus",
+      ethereum.Value.fromBoolean(newDisputeStatus)
+    )
+  )
+
+  return oracleDisputeStatusUpdatedEvent
 }
 
 export function createOwnershipTransferredEvent(
@@ -392,6 +441,102 @@ export function createProofSubmittedEvent(
   )
 
   return proofSubmittedEvent
+}
+
+export function createResolverAddressUpdatedEvent(
+  oldResolverAI: Address,
+  newResolverAI: Address
+): ResolverAddressUpdated {
+  let resolverAddressUpdatedEvent = changetype<ResolverAddressUpdated>(
+    newMockEvent()
+  )
+
+  resolverAddressUpdatedEvent.parameters = new Array()
+
+  resolverAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "oldResolverAI",
+      ethereum.Value.fromAddress(oldResolverAI)
+    )
+  )
+  resolverAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "newResolverAI",
+      ethereum.Value.fromAddress(newResolverAI)
+    )
+  )
+
+  return resolverAddressUpdatedEvent
+}
+
+export function createResolverFeeUpdatedEvent(
+  oldResolverFee: BigInt,
+  newResolverFee: BigInt
+): ResolverFeeUpdated {
+  let resolverFeeUpdatedEvent = changetype<ResolverFeeUpdated>(newMockEvent())
+
+  resolverFeeUpdatedEvent.parameters = new Array()
+
+  resolverFeeUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "oldResolverFee",
+      ethereum.Value.fromUnsignedBigInt(oldResolverFee)
+    )
+  )
+  resolverFeeUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "newResolverFee",
+      ethereum.Value.fromUnsignedBigInt(newResolverFee)
+    )
+  )
+
+  return resolverFeeUpdatedEvent
+}
+
+export function createSignerAddressUpdatedEvent(
+  oldSigner: Address,
+  newSigner: Address
+): SignerAddressUpdated {
+  let signerAddressUpdatedEvent = changetype<SignerAddressUpdated>(
+    newMockEvent()
+  )
+
+  signerAddressUpdatedEvent.parameters = new Array()
+
+  signerAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam("oldSigner", ethereum.Value.fromAddress(oldSigner))
+  )
+  signerAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam("newSigner", ethereum.Value.fromAddress(newSigner))
+  )
+
+  return signerAddressUpdatedEvent
+}
+
+export function createTomiDisputeAddressUpdatedEvent(
+  oldTomiDispute: Address,
+  newTomiDispute: Address
+): TomiDisputeAddressUpdated {
+  let tomiDisputeAddressUpdatedEvent = changetype<TomiDisputeAddressUpdated>(
+    newMockEvent()
+  )
+
+  tomiDisputeAddressUpdatedEvent.parameters = new Array()
+
+  tomiDisputeAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "oldTomiDispute",
+      ethereum.Value.fromAddress(oldTomiDispute)
+    )
+  )
+  tomiDisputeAddressUpdatedEvent.parameters.push(
+    new ethereum.EventParam(
+      "newTomiDispute",
+      ethereum.Value.fromAddress(newTomiDispute)
+    )
+  )
+
+  return tomiDisputeAddressUpdatedEvent
 }
 
 export function createUpgradedEvent(implementation: Address): Upgraded {

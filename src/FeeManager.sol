@@ -6,7 +6,7 @@ import {ITokenBridge} from "./Interfaces/ITokenBridge.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title FeeManager
-/// @notice A bridge contract using Stargate Router for cross-chain USDT transfers with UUPS upgradeability.
+/// @notice Manages the fee for bridging tokens to another chain.
 contract FeeManager is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @dev Uses the SafeERC20 library for safe operations with IERC20 tokens.
     using SafeERC20 for IERC20;
@@ -66,7 +66,13 @@ contract FeeManager is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         address burnerOnETHAddress,
         uint256 _thresholdtoBridge
     ) external initializer {
-        if (bridgeAddress == address(0) || usdtAddress == address(0)) {
+        if (
+            owner == address(0) ||
+            bridgeAddress == address(0) ||
+            usdtAddress == address(0) ||
+            burnerOnETHAddress == address(0) ||
+            _thresholdtoBridge == 0
+        ) {
             revert InvalidInputs();
         }
 
@@ -109,6 +115,13 @@ contract FeeManager is Initializable, OwnableUpgradeable, UUPSUpgradeable {
                 ethChainID,
                 burnerOnETH
             );
+    }
+
+    function updateBurnerOnETH(address _burnerOnETH) external onlyOwner {
+        if (_burnerOnETH == address(0)) {
+            revert InvalidInputs();
+        }
+        burnerOnETH = _burnerOnETH;
     }
 
     // ╔════════════════════════════════════════════════════════════════════╗ //

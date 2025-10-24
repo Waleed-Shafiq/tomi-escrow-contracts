@@ -92,14 +92,21 @@ Escrows can move into `InDisputeAI`, `ResolvedAI`, or `InDisputeOracle` when dis
 Owner-only setters (`updateFeeWallet`, `updateSwapAndBurnContract`, `updateTomiDisputeAddress`, `updateResolverAddress`, `updateResolverFee`) keep dependencies current. Each rejects zero addresses, unchanged values, or zero fees.
 
 ### Deployment Command : 
-forge script script/EscrowPayment.s.sol \
-  --rpc-url "$RPC_URL" \
+forge script script/FeeManager.s.sol \
+  --rpc-url "$RPC_URL_ARB" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
 
-Deployment Chain : Arbitrum Sepolia
-Deployment Address : 
-EscrowPayment implementation deployed at: 0x80980e8803041B7D1d7930B358706B4C546CbdA3
-EscrowPayment proxy deployed at: 0xC3d5027f9Fcc36A8a876a008D0111FFF7FA5051a
+Deployment Chain : Arbitrum 
+Deployment Address For FeeManager : 
+  feeManger implementation deployed at: 0x96f02Da4042F2234e2E887c90d6E17F504AB13B4
+  feeManger proxy deployed at: 0x960623419543C60dFC316F1D15194E69Fbe4C364
 
+forge script script/EscrowPayment.s.sol \
+  --rpc-url "$RPC_URL_ARB" \
+  --private-key "$PRIVATE_KEY" \
+  --broadcast --verify
+
+  escrowPayment implementation deployed at: 0xd378F9Ac772F1F608154861a39A3a8E28280d38f
+  escrowPayment proxy deployed at: 0x9A5bf30a7681D4abb654f77e26Ab66d2fDF4A1CE
 

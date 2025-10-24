@@ -30,7 +30,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public constant ESCROW_PLATFORM_FEE = 10_000; //1%
     uint256 public constant REGULAR_DISPUTE_DEAL_SIZE_FEE = 2_500; //0.25%
     uint256 public constant MINI_DISPUTE_DEAL_SIZE_FEE = 5_000; //0.5%
-    uint256 public constant DENIED_REFUND_TIME = 900 seconds; // 72 Hours
+    uint256 public constant DENIED_REFUND_TIME = 72 hours; // 72 Hours
     uint256 public constant APPEAL_TIME_DISPUTE_AI = 10 seconds; // 10 seconds for V1 : Instant Claim
 
     // ╔════════════════════════════════════════════════════════════════════╗ //

@@ -11,6 +11,6 @@ remappings = [
 ]
 
 # Testnets (optional)
-arbitrum-sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-sepolia.arbiscan.io/v2/api" }
+arbitrum = { key = "${ETHERSCAN_API_KEY}", url = "https://api.arbiscan.io/v2/api" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

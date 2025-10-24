@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: EscrowPayment
-    network: sepolia
+    network: arbitrum-one
     source:
-      address: "0x47165D0aA5a61CDD9094Bb3afd3D2f8101CcF110"
+      address: "0xd378F9Ac772F1F608154861a39A3a8E28280d38f"
       abi: EscrowPayment
-      startBlock: 9360707
+      startBlock: 392937549
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -27,9 +27,15 @@ dataSources:
         - EscrowRefunded
         - EscrowReleased
         - EscrowSubmitted
+        - FeeWalletUpdated
         - Initialized
+        - OracleDisputeStatusUpdated
         - OwnershipTransferred
         - ProofSubmitted
+        - ResolverAddressUpdated
+        - ResolverFeeUpdated
+        - SignerAddressUpdated
+        - TomiDisputeAddressUpdated
         - Upgraded
       abis:
         - name: EscrowPayment
@@ -47,22 +53,34 @@ dataSources:
           handler: handleDisputeResolvedByOracle
         - event: EscrowAccepted(uint256,uint8)
           handler: handleEscrowAccepted
-        - event: EscrowCreated((uint256,string,string,address,address,address,uint256,uint256,uint256,uint256,uint8,uint8),uint256)
+        - event: EscrowCreated((uint256,string,string,address,address,address,uint256,uint256,uint256,uint8,uint8),uint256)
           handler: handleEscrowCreated
         - event: EscrowDenied(uint256,uint8)
           handler: handleEscrowDenied
         - event: EscrowRefunded(uint256,uint8)
           handler: handleEscrowRefunded
-        - event: EscrowReleased(uint256,uint8,uint256,uint256)
+        - event: EscrowReleased(uint256,uint8,uint256)
           handler: handleEscrowReleased
         - event: EscrowSubmitted(uint256,uint8)
           handler: handleEscrowSubmitted
+        - event: FeeWalletUpdated(address,address)
+          handler: handleFeeWalletUpdated
         - event: Initialized(uint64)
           handler: handleInitialized
+        - event: OracleDisputeStatusUpdated(bool,bool)
+          handler: handleOracleDisputeStatusUpdated
         - event: OwnershipTransferred(indexed address,indexed address)
           handler: handleOwnershipTransferred
         - event: ProofSubmitted(uint256,address,address,string)
           handler: handleProofSubmitted
+        - event: ResolverAddressUpdated(address,address)
+          handler: handleResolverAddressUpdated
+        - event: ResolverFeeUpdated(uint256,uint256)
+          handler: handleResolverFeeUpdated
+        - event: SignerAddressUpdated(address,address)
+          handler: handleSignerAddressUpdated
+        - event: TomiDisputeAddressUpdated(address,address)
+          handler: handleTomiDisputeAddressUpdated
         - event: Upgraded(indexed address)
           handler: handleUpgraded
       file: ./src/escrow-payment.ts

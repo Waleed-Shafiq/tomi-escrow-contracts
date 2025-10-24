@@ -47,6 +47,7 @@
   { "inputs": [], "name": "OnlyCreatedOneAreAllowed", "type": "error" },
   { "inputs": [], "name": "OnlySubmittedOneAreAllowed", "type": "error" },
   { "inputs": [], "name": "OnlyUsdtAllowed", "type": "error" },
+  { "inputs": [], "name": "OracleDisputeNotAllowed", "type": "error" },
   {
     "inputs": [
       { "internalType": "address", "name": "owner", "type": "address" }
@@ -249,7 +250,6 @@
             "name": "tokenAmount",
             "type": "uint256"
           },
-          { "internalType": "uint256", "name": "feeinPPM", "type": "uint256" },
           {
             "internalType": "uint256",
             "name": "submissionDeadline",
@@ -344,12 +344,6 @@
         "internalType": "uint256",
         "name": "amountReleased",
         "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "feeForSwapandBurn",
-        "type": "uint256"
       }
     ],
     "name": "EscrowReleased",
@@ -379,12 +373,50 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "address",
+        "name": "oldFeeWallet",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newFeeWallet",
+        "type": "address"
+      }
+    ],
+    "name": "FeeWalletUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "uint64",
         "name": "version",
         "type": "uint64"
       }
     ],
     "name": "Initialized",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "oldDisputeStatus",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "internalType": "bool",
+        "name": "newDisputeStatus",
+        "type": "bool"
+      }
+    ],
+    "name": "OracleDisputeStatusUpdated",
     "type": "event"
   },
   {
@@ -441,6 +473,82 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldResolverAI",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newResolverAI",
+        "type": "address"
+      }
+    ],
+    "name": "ResolverAddressUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldResolverFee",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newResolverFee",
+        "type": "uint256"
+      }
+    ],
+    "name": "ResolverFeeUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldSigner",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newSigner",
+        "type": "address"
+      }
+    ],
+    "name": "SignerAddressUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "oldTomiDispute",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "newTomiDispute",
+        "type": "address"
+      }
+    ],
+    "name": "TomiDisputeAddressUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": true,
         "internalType": "address",
         "name": "implementation",
@@ -468,6 +576,25 @@
   },
   {
     "inputs": [
+      { "internalType": "uint256", "name": "escrowID", "type": "uint256" }
+    ],
+    "name": "ClaimAIDispute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
+      { "internalType": "uint256", "name": "resolverFee", "type": "uint256" }
+    ],
+    "name": "CreateAIDispute",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
       { "internalType": "uint256", "name": "amountinUSD", "type": "uint256" }
     ],
@@ -482,7 +609,6 @@
       { "internalType": "address", "name": "toAddress", "type": "address" },
       { "internalType": "address", "name": "tokenAddress", "type": "address" },
       { "internalType": "uint256", "name": "amountInUSDT", "type": "uint256" },
-      { "internalType": "uint256", "name": "feeinPPM", "type": "uint256" },
       { "internalType": "uint256", "name": "deadline", "type": "uint256" },
       {
         "internalType": "enum EscrowPayment.DisputeType",
@@ -512,15 +638,18 @@
     "type": "function"
   },
   {
+    "inputs": [],
+    "name": "ESCROW_PLATFORM_FEE",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" },
       {
         "internalType": "address",
         "name": "feeWalletAddress",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "swapandBurnContractAddress",
         "type": "address"
       },
       {
@@ -548,7 +677,21 @@
   },
   {
     "inputs": [],
+    "name": "MINI_DISPUTE_DEAL_SIZE_FEE",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "PPM",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "REGULAR_DISPUTE_DEAL_SIZE_FEE",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -574,9 +717,42 @@
   {
     "inputs": [
       { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" },
+      { "internalType": "bytes", "name": "signature", "type": "bytes" }
+    ],
+    "name": "ResolveDisputeOracle",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
+      { "internalType": "address", "name": "winnerAddress", "type": "address" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" },
+      { "internalType": "bytes", "name": "signature", "type": "bytes" }
+    ],
+    "name": "ResolveViaAI",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
       { "internalType": "string", "name": "submissionURI", "type": "string" }
     ],
     "name": "SubmitEscrow",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
+      { "internalType": "string", "name": "proofURI", "type": "string" }
+    ],
+    "name": "SubmitProofAgain",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -590,19 +766,72 @@
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "escrowID", "type": "uint256" }
+      {
+        "internalType": "address",
+        "name": "_feeWalletAddress",
+        "type": "address"
+      }
     ],
-    "name": "claimAIDispute",
+    "name": "UpdateFeeWallet",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bool", "name": "_status", "type": "bool" }],
+    "name": "UpdateOracleDisputeStatus",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
-      { "internalType": "uint256", "name": "resolverFee", "type": "uint256" }
+      {
+        "internalType": "address",
+        "name": "_updatedResolverAddress",
+        "type": "address"
+      }
     ],
-    "name": "createAIDispute",
+    "name": "UpdateResolverAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_updatedResolverFee",
+        "type": "uint256"
+      }
+    ],
+    "name": "UpdateResolverFee",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_updateSignerAddress",
+        "type": "address"
+      }
+    ],
+    "name": "UpdateSignerAddress",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_updatedTomiDisputeAddress",
+        "type": "address"
+      }
+    ],
+    "name": "UpdateTomiDisputeAddress",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -624,13 +853,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "escrowPlatformFee",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       { "internalType": "uint256", "name": "escrowID", "type": "uint256" }
     ],
@@ -647,7 +869,6 @@
       { "internalType": "address", "name": "toAddress", "type": "address" },
       { "internalType": "address", "name": "tokenAddress", "type": "address" },
       { "internalType": "uint256", "name": "tokenAmount", "type": "uint256" },
-      { "internalType": "uint256", "name": "feeinPPM", "type": "uint256" },
       {
         "internalType": "uint256",
         "name": "submissionDeadline",
@@ -711,8 +932,8 @@
   },
   {
     "inputs": [],
-    "name": "miniDisputeDealSizeFee",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "isOracleDisputeAllowed",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -732,37 +953,7 @@
   },
   {
     "inputs": [],
-    "name": "regularDisputeDealSizeFee",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "renounceOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
-      { "internalType": "uint256", "name": "deadline", "type": "uint256" },
-      { "internalType": "bytes", "name": "signature", "type": "bytes" }
-    ],
-    "name": "resolveDisputeOracle",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
-      { "internalType": "address", "name": "winnerAddress", "type": "address" },
-      { "internalType": "uint256", "name": "deadline", "type": "uint256" },
-      { "internalType": "bytes", "name": "signature", "type": "bytes" }
-    ],
-    "name": "resolveViaAI",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -796,23 +987,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "escrowID", "type": "uint256" },
-      { "internalType": "string", "name": "proofURI", "type": "string" }
-    ],
-    "name": "submitProofAgain",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "swapandBurnContract",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "tomiDisputeAddress",
     "outputs": [
@@ -833,71 +1007,6 @@
       { "internalType": "address", "name": "newOwner", "type": "address" }
     ],
     "name": "transferOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_feeWalletAddress",
-        "type": "address"
-      }
-    ],
-    "name": "updateFeeWallet",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_updatedResolverAddress",
-        "type": "address"
-      }
-    ],
-    "name": "updateResolverAddress",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "_updatedResolverFee",
-        "type": "uint256"
-      }
-    ],
-    "name": "updateResolverFee",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_swapAndBurnAddress",
-        "type": "address"
-      }
-    ],
-    "name": "updateSwapAndBurnContract",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_updatedTomiDisputeAddress",
-        "type": "address"
-      }
-    ],
-    "name": "updateTomiDisputeAddress",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
