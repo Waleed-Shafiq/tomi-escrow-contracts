@@ -31,7 +31,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 public constant REGULAR_DISPUTE_DEAL_SIZE_FEE = 2_500; //0.25%
     uint256 public constant MINI_DISPUTE_DEAL_SIZE_FEE = 5_000; //0.5%
     uint256 public constant DENIED_REFUND_TIME = 72 hours; // 72 Hours
-    uint256 public constant APPEAL_TIME_DISPUTE_AI = 10 seconds; // 10 seconds for V1 : Instant Claim
+    uint256 public constant APPEAL_TIME_DISPUTE_AI = 30 minutes; // 30 minutes for V2 : 30 minutes window for the appeal to human oracle
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Structs                                ║ //
@@ -131,7 +131,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     event EscrowSubmitted(uint256 escrowId, EscrowStatus escrowIdStatus);
     event EscrowDenied(uint256 escrowId, EscrowStatus escrowIdStatus);
     event DipsuteAICreated(uint256 escrowID, address disputerAddress);
-    event DisputeOracleCreated(uint256 escrowID, address disputerAddress);
+    event DisputeOracleCreated(address disputeOracleAddress,uint256 escrowID, address disputerAddress);
     event AI_DisputeClaimed(uint256 escrowId, EscrowStatus escrowIdStatus);
     event FeeWalletUpdated(address oldFeeWallet, address newFeeWallet);
     event ResolverAddressUpdated(address oldResolverAI, address newResolverAI);
@@ -790,7 +790,7 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
         activeEscrow.status = EscrowStatus.InDisputeOracle;
 
-        emit DisputeOracleCreated(escrowID, msg.sender);
+        emit DisputeOracleCreated(disputeAddress,escrowID, msg.sender);
     }
 
     /**

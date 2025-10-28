@@ -692,6 +692,64 @@ contract EscrowPaymentTest is Test {
         assertEq(uint256(status), uint256(EscrowPayment.EscrowStatus.Refunded));
     }
 
+    function test_CreateDispute_EnforcesThirtyMinuteAppealWindow() public {
+        vm.prank(owner);
+        escrow.UpdateOracleDisputeStatus(true);
+
+        uint256 amount = MIN_REGULAR_DISPUTE_AMOUNT + 10 * 1e6;
+        uint256 amountInUSD = MIN_REGULAR_DISPUTE_AMOUNT;
+        (uint256 oracleFee, ) = _computeOracleFees(
+            amount,
+            amountInUSD,
+            EscrowPayment.DisputeType.RegularDispute
+        );
+
+        uint256 firstId = _prepareAIDispute(amount, "ipfs://appeal-allow");
+        uint256 deadline1 = block.timestamp + 1 hours;
+        bytes memory sig1 = _signAIResolution(firstId, bob, deadline1);
+
+        vm.prank(resolverAI);
+        escrow.ResolveViaAI(firstId, bob, deadline1, sig1);
+
+        EscrowPayment.EscrowAIDisputeInfo memory info1 = _getAIInfo(firstId);
+        uint256 appealTime = escrow.APPEAL_TIME_DISPUTE_AI();
+        assertEq(appealTime, 30 minutes);
+
+        vm.warp(info1.resolveTime + appealTime - 1);
+
+        usdt.mint(alice, oracleFee);
+        vm.prank(alice);
+        usdt.approve(address(tomiDispute), oracleFee);
+
+        vm.prank(alice);
+        escrow.CreateDispute(firstId, amountInUSD);
+
+        EscrowPayment.EscrowStatus status1 = _getEscrowStatus(firstId);
+        assertEq(
+            uint256(status1),
+            uint256(EscrowPayment.EscrowStatus.InDisputeOracle)
+        );
+
+        uint256 secondId = _prepareAIDispute(amount, "ipfs://appeal-block");
+        uint256 deadline2 = block.timestamp + 1 hours;
+        bytes memory sig2 = _signAIResolution(secondId, bob, deadline2);
+
+        vm.prank(resolverAI);
+        escrow.ResolveViaAI(secondId, bob, deadline2, sig2);
+
+        EscrowPayment.EscrowAIDisputeInfo memory info2 = _getAIInfo(secondId);
+
+        vm.warp(info2.resolveTime + appealTime + 1);
+
+        usdt.mint(alice, oracleFee);
+        vm.prank(alice);
+        usdt.approve(address(tomiDispute), oracleFee);
+
+        vm.prank(alice);
+        vm.expectRevert(EscrowPayment.AppealWindowOver.selector);
+        escrow.CreateDispute(secondId, amountInUSD);
+    }
+
     // ===== Oracle dispute tests =====
     function test_OracleDispute_CreateDisputeSetsStateAndLoyaltyFee() public {
         uint256 amount = 8_000_000;

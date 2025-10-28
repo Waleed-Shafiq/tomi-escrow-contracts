@@ -97,20 +97,20 @@ forge script script/FeeManager.s.sol \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
 
-Deployment Chain : Arbitrum 
+Deployment Chain : Sepolia Arbitrum  
 Deployment Address For FeeManager : 
-  feeManger implementation deployed at: 0x96f02Da4042F2234e2E887c90d6E17F504AB13B4
-  feeManger proxy deployed at: 0x960623419543C60dFC316F1D15194E69Fbe4C364
+  feeManger implementation deployed at: 
+  feeManger proxy deployed at: 
 
 forge script script/EscrowPayment.s.sol \
   --rpc-url "$RPC_URL_ARB" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
 
-Deployment Chain : Arbitrum 
+Deployment Chain : Sepolia Arbitrum 
 Deployment Address For EscrowPayment : 
-  escrowPayment implementation deployed at: 0xd378F9Ac772F1F608154861a39A3a8E28280d38f
-  escrowPayment proxy deployed at: 0x9A5bf30a7681D4abb654f77e26Ab66d2fDF4A1CE
+  escrowPayment implementation deployed at: 0xa95929e62Feea74052FAdfb9E9841E366F826Aad
+  escrowPayment proxy deployed at: 0x4a9E98843F7AA1A321b118c2178CE179A380F8B8
 
 forge script script/EscrowFeeBurner.s.sol \
   --rpc-url "$RPC_URL_ETH" \
@@ -121,3 +121,8 @@ Deployment Chain : Etheruem
 Deployment Address For EscrowFeeBurner : 
   escrowFeeBurner implementation deployed at: 0x96f02Da4042F2234e2E887c90d6E17F504AB13B4
   escrowFeeBurner proxy deployed at: 0x960623419543C60dFC316F1D15194E69Fbe4C364
+
+forge script script/EscrowContractUpgrade.s.sol \
+  --rpc-url "$RPC_URL_ARB" \
+  --private-key "$PRIVATE_KEY" \
+  --broadcast --verify
