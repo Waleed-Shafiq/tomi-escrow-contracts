@@ -1,0 +1,203 @@
+type AI_DisputeClaimed @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DipsuteAICreated @entity(immutable: true) {
+  id: Bytes!
+  escrowID: BigInt! # uint256
+  disputerAddress: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DisputeOracleCreated @entity(immutable: true) {
+  id: Bytes!
+  disputeOracleAddress: Bytes! # address
+  escrowID: BigInt! # uint256
+  disputerAddress: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DisputeResolvedByAI @entity(immutable: true) {
+  id: Bytes!
+  escrowID: BigInt! # uint256
+  winnerAddress: Bytes! # address
+  timeStamp: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DisputeResolvedByOracle @entity(immutable: true) {
+  id: Bytes!
+  escrowID: BigInt! # uint256
+  disputeContract: Bytes! # address
+  winnerAddress: Bytes! # address
+  timeStamp: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowAccepted @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowCreated @entity(immutable: true) {
+  id: Bytes!
+  escrowdetails_escrowID: BigInt! # uint256
+  escrowdetails_escrowDetialsURI: String! # string
+  escrowdetails_submissionURI: String! # string
+  escrowdetails_fromAddress: Bytes! # address
+  escrowdetails_toAddress: Bytes! # address
+  escrowdetails_tokenAddress: Bytes! # address
+  escrowdetails_tokenAmount: BigInt! # uint256
+  escrowdetails_submissionDeadline: BigInt! # uint256
+  escrowdetails_resultTime: BigInt! # uint256
+  escrowdetails_status: Int! # uint8
+  escrowdetails_disputeType: Int! # uint8
+  escrowFee: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowDenied @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowRefunded @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowReleased @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  amountReleased: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type EscrowSubmitted @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  escrowIdStatus: Int! # uint8
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type FeeWalletUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldFeeWallet: Bytes! # address
+  newFeeWallet: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Initialized @entity(immutable: true) {
+  id: Bytes!
+  version: BigInt! # uint64
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type OracleDisputeStatusUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldDisputeStatus: Boolean! # bool
+  newDisputeStatus: Boolean! # bool
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type OwnershipTransferred @entity(immutable: true) {
+  id: Bytes!
+  previousOwner: Bytes! # address
+  newOwner: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type ProofSubmitted @entity(immutable: true) {
+  id: Bytes!
+  escrowId: BigInt! # uint256
+  disputeContract: Bytes! # address
+  submittedBy: Bytes! # address
+  proofURI: String! # string
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type ResolverAddressUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldResolverAI: Bytes! # address
+  newResolverAI: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type ResolverFeeUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldResolverFee: BigInt! # uint256
+  newResolverFee: BigInt! # uint256
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type SignerAddressUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldSigner: Bytes! # address
+  newSigner: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type TomiDisputeAddressUpdated @entity(immutable: true) {
+  id: Bytes!
+  oldTomiDispute: Bytes! # address
+  newTomiDispute: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Upgraded @entity(immutable: true) {
+  id: Bytes!
+  implementation: Bytes! # address
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
