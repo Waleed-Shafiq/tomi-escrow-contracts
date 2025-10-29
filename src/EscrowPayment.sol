@@ -182,6 +182,12 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         public escrowtoDisputeOracle;
 
     // ╔════════════════════════════════════════════════════════════════════╗ //
+    // ║                          Upgraded  Storage                         ║ //
+    // ╚════════════════════════════════════════════════════════════════════╝ //
+
+    address public disputeAiFeeWallet;
+
+    // ╔════════════════════════════════════════════════════════════════════╗ //
     // ║                             Constructor                            ║ //
     // ╚════════════════════════════════════════════════════════════════════╝ //
 
@@ -527,8 +533,15 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             revert InvalidFee();
         }
 
+        uint256 callerShare = 5e5; // 0.5$;
         // transfer the resolver fee to the AI resolver as 1 USDT
-        IERC20(usdtToken).safeTransferFrom(msg.sender, resolverAI, resolverFee);
+        IERC20(usdtToken).safeTransferFrom(msg.sender, resolverAI, callerShare);
+        // transfer the resolver fee to the Tomi Dispute contract
+        IERC20(usdtToken).safeTransferFrom(
+            msg.sender,
+            address(disputeAiFeeWallet),
+            resolverFee - callerShare
+        );
 
         escrowIDtoAIDispute[escrowID] = true;
         activeEscrow.status = EscrowStatus.InDisputeAI;
@@ -1029,6 +1042,20 @@ contract EscrowPayment is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         emit OracleDisputeStatusUpdated(isOracleDisputeAllowed, _status);
 
         isOracleDisputeAllowed = _status;
+    }
+
+    function UpdateDisputeAiFeeWallet(
+        address _updatedDisputeAiFeeWallet
+    ) external onlyOwner {
+        if (_updatedDisputeAiFeeWallet == address(0)) {
+            revert ZeroAddress();
+        }
+
+        if (_updatedDisputeAiFeeWallet == address(disputeAiFeeWallet)) {
+            revert SameAsLastOne();
+        }
+
+        disputeAiFeeWallet = _updatedDisputeAiFeeWallet;
     }
 
     // ╔════════════════════════════════════════════════════════════════════╗ //

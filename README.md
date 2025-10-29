@@ -91,33 +91,34 @@ Escrows can move into `InDisputeAI`, `ResolvedAI`, or `InDisputeOracle` when dis
 
 Owner-only setters (`updateFeeWallet`, `updateSwapAndBurnContract`, `updateTomiDisputeAddress`, `updateResolverAddress`, `updateResolverFee`) keep dependencies current. Each rejects zero addresses, unchanged values, or zero fees.
 
-### Deployment Command : 
+### Deployment Commands
+
+#### FeeManager (Arbitrum)
+```bash
 forge script script/FeeManager.s.sol \
   --rpc-url "$RPC_URL_ARB" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
+```
+- Implementation: `0x96f02Da4042F2234e2E887c90d6E17F504AB13B4`
+- Proxy: `0x960623419543C60dFC316F1D15194E69Fbe4C364`
 
-Deployment Chain : Arbitrum 
-Deployment Address For FeeManager : 
-  feeManger implementation deployed at: 0x96f02Da4042F2234e2E887c90d6E17F504AB13B4
-  feeManger proxy deployed at: 0x960623419543C60dFC316F1D15194E69Fbe4C364
-
+#### EscrowPayment (Arbitrum)
+```bash
 forge script script/EscrowPayment.s.sol \
   --rpc-url "$RPC_URL_ARB" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
+```
+- Implementation: `0xbFF9577af55932b85917210b86784c6f2D585b4d`
+- Proxy: `0x9A5bf30a7681D4abb654f77e26Ab66d2fDF4A1CE`
 
-Deployment Chain : Arbitrum 
-Deployment Address For EscrowPayment : 
-  escrowPayment implementation deployed at: 0xd378F9Ac772F1F608154861a39A3a8E28280d38f
-  escrowPayment proxy deployed at: 0x9A5bf30a7681D4abb654f77e26Ab66d2fDF4A1CE
-
+#### EscrowFeeBurner (Ethereum)
+```bash
 forge script script/EscrowFeeBurner.s.sol \
   --rpc-url "$RPC_URL_ETH" \
   --private-key "$PRIVATE_KEY" \
   --broadcast --verify
-
-Deployment Chain : Etheruem 
-Deployment Address For EscrowFeeBurner : 
-  escrowFeeBurner implementation deployed at: 0x96f02Da4042F2234e2E887c90d6E17F504AB13B4
-  escrowFeeBurner proxy deployed at: 0x960623419543C60dFC316F1D15194E69Fbe4C364
+```
+- Implementation: `0x96f02Da4042F2234e2E887c90d6E17F504AB13B4`
+- Proxy: `0x960623419543C60dFC316F1D15194E69Fbe4C364`

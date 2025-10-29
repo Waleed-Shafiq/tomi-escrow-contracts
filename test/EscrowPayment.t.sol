@@ -16,6 +16,7 @@ contract EscrowPaymentTest is Test {
     address internal alice; // fromAddress
     address internal bob; // toAddress
     address internal feeWallet;
+    address internal disputeAIfeeWallet;
     address internal swapAndBurn;
     address internal resolverAI;
     address internal signer;
@@ -38,6 +39,7 @@ contract EscrowPaymentTest is Test {
         feeWallet = makeAddr("feeWallet");
         swapAndBurn = makeAddr("swapAndBurn");
         resolverAI = makeAddr("resolverAI");
+        disputeAIfeeWallet = makeAddr("disputeAIfeeWallet");
         signerPk = 0xBEEF;
         signer = vm.addr(signerPk);
 
@@ -565,6 +567,9 @@ contract EscrowPaymentTest is Test {
         _accept(id);
         _submit(id, "ipfs://art");
 
+        vm.prank(owner);
+        escrow.UpdateDisputeAiFeeWallet(disputeAIfeeWallet);
+
         // fund and approve resolver fee for bob (responder)
         usdt.mint(bob, RESOLVER_FEE);
         vm.prank(bob);
@@ -575,9 +580,13 @@ contract EscrowPaymentTest is Test {
         vm.expectRevert(EscrowPayment.YouAreNotAuthorized.selector);
         escrow.CreateAIDispute(id, RESOLVER_FEE);
 
+        uint256 balanceBefore = usdt.balanceOf(resolverAI);
+
         // responder can create when Submitted
         vm.prank(bob);
         escrow.CreateAIDispute(id, RESOLVER_FEE);
+        assertEq(usdt.balanceOf(disputeAIfeeWallet), RESOLVER_FEE - 5e5);
+        assertEq(usdt.balanceOf(resolverAI), balanceBefore + 5e5);
 
         // set back to Submitted (simulate restart) and Deny then allow AI dispute
         // For a fresh escrow
@@ -594,6 +603,8 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_AIDispute_ResolveViaAIRequiresValidSignature() public {
+        vm.prank(owner);
+        escrow.UpdateDisputeAiFeeWallet(disputeAIfeeWallet);
         uint256 id = _prepareAIDispute(4_000_000, "ipfs://submission");
 
         uint256 deadline = block.timestamp + 1 hours;
@@ -627,6 +638,8 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_AIDispute_ClaimBeforeAppealWindowReverts() public {
+        vm.prank(owner);
+        escrow.UpdateDisputeAiFeeWallet(disputeAIfeeWallet);
         uint256 id = _prepareAIDispute(5_000_000, "ipfs://sub");
 
         uint256 deadline = block.timestamp + 1 hours;
@@ -641,6 +654,8 @@ contract EscrowPaymentTest is Test {
     }
 
     function test_AIDispute_ClaimAfterAppealWindowPaysResponder() public {
+        vm.prank(owner);
+        escrow.UpdateDisputeAiFeeWallet(disputeAIfeeWallet);
         uint256 amount = 9_000_000;
         uint256 id = _prepareAIDispute(amount, "ipfs://job");
 
@@ -667,6 +682,9 @@ contract EscrowPaymentTest is Test {
     function test_AIDispute_ClaimAfterAppealRefundsCreatorWhenAIWinner()
         public
     {
+        vm.prank(owner);
+        escrow.UpdateDisputeAiFeeWallet(disputeAIfeeWallet);
+
         uint256 amount = 7_500_000;
         uint256 id = _prepareAIDispute(amount, "ipfs://design");
 
